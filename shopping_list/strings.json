@@ -1,0 +1,35 @@
+{
+  "manifest": {
+    "name": "Shopping list",
+    "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone, without stopping the music."
+  },
+  "config_entries": {
+    "player_id": {
+      "label": "Player",
+      "description": "The player your headphones are connected to, usually your phone in the Music Assistant app."
+    },
+    "person_entity": {
+      "label": "Person",
+      "description": "The Home Assistant person whose location counts, such as person.alex."
+    },
+    "zone_entities": {
+      "label": "Supermarket zones",
+      "description": "The Home Assistant zones in which shopping mode is on, separated by commas, such as zone.supermarket, zone.market."
+    },
+    "todo_entity": {
+      "label": "Shopping list",
+      "description": "The Home Assistant to-do list to read, such as todo.shopping_list."
+    },
+    "remove_items": {
+      "label": "Delete entries instead of ticking them off",
+      "description": "Two presses delete the entry from the list instead of marking it as completed."
+    },
+    "language": {
+      "label": "Language of the announcements",
+      "options": {
+        "de": "German",
+        "en": "English"
+      }
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "manifest": {
+    "name": "Einkaufsliste",
+    "description": "Liest deine Home-Assistant-Einkaufsliste über die Tasten deiner Kopfhörer vor und hakt sie ab, solange du in einer Supermarkt-Zone bist, ohne die Musik anzuhalten."
+  },
+  "config_entries": {
+    "player_id": {
+      "label": "Player",
+      "description": "Der Player, mit dem deine Kopfhörer verbunden sind, meist dein Handy in der Music-Assistant-App."
+    },
+    "person_entity": {
+      "label": "Person",
+      "description": "Die Home-Assistant-Person, deren Standort zählt, z. B. person.alex."
+    },
+    "zone_entities": {
+      "label": "Supermarkt-Zonen",
+      "description": "Die Home-Assistant-Zonen, in denen der Einkaufsmodus aktiv ist, mit Komma getrennt, z. B. zone.supermarkt, zone.markt."
+    },
+    "todo_entity": {
+      "label": "Einkaufsliste",
+      "description": "Die Home-Assistant-To-do-Liste, die vorgelesen wird, z. B. todo.shopping_list."
+    },
+    "remove_items": {
+      "label": "Einträge löschen statt abhaken",
+      "description": "Zweimal drücken löscht den Eintrag aus der Liste, statt ihn als erledigt zu markieren."
+    },
+    "language": {
+      "label": "Sprache der Ansagen",
+      "options": {
+        "de": "Deutsch",
+        "en": "Englisch"
+      }
+    }
+  }
+}

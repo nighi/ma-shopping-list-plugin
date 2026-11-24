@@ -1,0 +1,13 @@
+{
+  "type": "plugin",
+  "domain": "shopping_list",
+  "stage": "alpha",
+  "name": "Shopping list",
+  "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone, without stopping the music.",
+  "codeowners": ["@nighi"],
+  "provides": ["assistant"],
+  "requirements": [],
+  "depends_on": "hass",
+  "documentation": "https://github.com/nighi/ma-shopping-list-plugin#readme",
+  "multi_instance": false
+}
