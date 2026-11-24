@@ -42,6 +42,9 @@ Music Assistant itself, which is to be discussed with its maintainers.
 - In Home Assistant: a **person** with location tracking (e.g. the Companion app), one or more
   **zones** for your supermarkets, and a **to-do list** (the built-in Shopping list is
   `todo.shopping_list`).
+- A **text-to-speech engine for announcements** in Music Assistant (Settings → Players →
+  Announcements). The Home Assistant plugin offers the TTS services of Home Assistant, such as
+  Google Translate or Piper.
 - A player that supports **announcements** and that your headphone buttons control, such as your
   phone in the [Music Assistant app](https://github.com/music-assistant/mobile-app).
 
