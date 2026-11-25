@@ -440,7 +440,9 @@ class ShoppingListProvider(PluginProvider):
         phrases = self._phrases
         if gesture == Gesture.READ:
             await self._refresh()
-            return self._list.current.summary if self._list.current else phrases.empty
+            # a lone word is too short for some players to be heard at all
+            current = self._list.current
+            return phrases.read.format(current.summary) if current else phrases.empty
 
         item = self._list.current
         if item is None:
