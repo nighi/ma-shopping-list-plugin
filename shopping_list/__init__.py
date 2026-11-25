@@ -81,6 +81,8 @@ OWN_CHANGES_SECONDS = 4.0
 RESUME_TIMEOUT = 8.0
 # how long the music plays again before the announcement starts
 SETTLE_SECONDS = 2.0
+# how long a pause made in the app settles before an announcement goes to the silent player
+AFTER_APP_PAUSE_SECONDS = 2.0
 # the Home Assistant domains each entity setting offers to choose from
 ENTITY_DOMAINS: dict[str, set[str]] = {
     CONF_PERSON: {"person"},
@@ -441,9 +443,13 @@ class ShoppingListProvider(PluginProvider):
         words, so the music is halted once, before the announcement, and put back once, after.
         """
         try:
-            if detection.gesture != Gesture.READ:
-                # the press already halted the music for reading; this also cancels the move
-                # to another track that a next or previous still has pending
+            if detection.gesture == Gesture.READ:
+                # the press already halted the music, in the app first: an app can still be
+                # settling its own pause and silence a stream that arrives meanwhile
+                await asyncio.sleep(AFTER_APP_PAUSE_SECONDS)
+            else:
+                # this also cancels the move to another track that a next or previous still
+                # has pending
                 await self.mass.player_queues.pause(queue_id)
         except Exception as err:  # noqa: BLE001 - the entry is still said when this fails
             self.logger.warning("Could not halt the music: %s", err)
