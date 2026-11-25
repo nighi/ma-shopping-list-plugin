@@ -42,6 +42,10 @@
         "de": "Deutsch",
         "en": "Englisch"
       }
+    },
+    "tts_engine": {
+      "label": "Sprachausgabe",
+      "description": "Die Stimme, die die Einträge vorliest. Home Assistant bietet hier jede seiner Text-to-Speech-Entitäten an, z. B. Google Translate oder Piper."
     }
   },
   "config_actions": {

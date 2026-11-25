@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from shopping_list.home_assistant import EntityStates, finish_item, get_open_items
+from shopping_list.home_assistant import EntityStates, finish_item, get_open_items, is_entity_id
 from shopping_list.phrases import get_phrases
 from shopping_list.shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -127,3 +127,12 @@ def test_shopping_mode_from_zone_or_by_hand() -> None:
     mode.zone = None
     assert not is_on(mode)
     assert mode.switched()
+
+
+def test_entity_ids() -> None:
+    """Entity ids are a domain, a dot and an object id; anything else is misspelled."""
+    assert is_entity_id("person.alex")
+    assert is_entity_id("input_boolean.shopping_mode")
+    assert not is_entity_id("s")
+    assert not is_entity_id("person.")
+    assert not is_entity_id("Person.Alex")

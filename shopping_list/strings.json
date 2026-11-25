@@ -42,6 +42,10 @@
         "de": "German",
         "en": "English"
       }
+    },
+    "tts_engine": {
+      "label": "Text-to-speech engine",
+      "description": "The voice that reads the entries. Home Assistant offers each of its text-to-speech entities here, such as Google Translate or Piper."
     }
   },
   "config_actions": {

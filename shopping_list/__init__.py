@@ -26,10 +26,14 @@ from music_assistant_models.config_entries import (
 from music_assistant_models.enums import ConfigEntryType, EventType, PlaybackState
 from music_assistant_models.errors import SetupFailedError
 
+from music_assistant.helpers.plugin_engines import (
+    create_tts_engine_config_entries,
+    resolve_tts_engine_setting,
+)
 from music_assistant.models.plugin import PluginProvider
 
 from .gestures import Detection, Gesture, QueueSnapshot, detect_gesture
-from .home_assistant import EntityStates, finish_item, get_open_items
+from .home_assistant import EntityStates, finish_item, get_open_items, is_entity_id
 from .phrases import DEFAULT_LANGUAGE, PHRASES, Phrases, get_phrases
 from .shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -54,6 +58,7 @@ CONF_TODO = "todo_entity"
 CONF_REMOVE = "remove_items"
 CONF_LANGUAGE = "language"
 CONF_SWITCH = "switch_entity"
+CONF_TTS = "tts_engine"
 ACTION_START = "start_shopping"
 ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
@@ -130,7 +135,8 @@ class ShoppingListProvider(PluginProvider):
             ConfigValueOption(player.player_id, player.name)
             for player in self.mass.players.all_players(return_unavailable=True)
         ]
-        return config_entries(players)
+        tts = await create_tts_engine_config_entries(self.mass, CONF_TTS, category="generic")
+        return (*config_entries(players), *tts)
 
     def _setting(self, key: str, default: str = "") -> str:
         """Return a text setting, stripped of spaces."""
@@ -140,21 +146,34 @@ class ShoppingListProvider(PluginProvider):
     def _player_id(self) -> str:
         return self._setting(CONF_PLAYER)
 
+    def _entities(self, key: str, default: str = "") -> list[str]:
+        """Return the entity ids of a setting, comma separated, without the ones misspelled."""
+        values = [value.strip() for value in self._setting(key, default).split(",")]
+        return [value for value in values if value and is_entity_id(value)]
+
+    def _misspelled(self) -> list[str]:
+        """Return the settings with a value that is no entity id, to say so in the log."""
+        found = []
+        for key in (CONF_PERSON, CONF_ZONES, CONF_SWITCH, CONF_TODO):
+            values = [value.strip() for value in self._setting(key).split(",")]
+            found += [f"{key}={value!r}" for value in values if value and not is_entity_id(value)]
+        return found
+
     @property
     def _person(self) -> str:
-        return self._setting(CONF_PERSON)
+        return next(iter(self._entities(CONF_PERSON)), "")
 
     @property
     def _zones(self) -> list[str]:
-        return [zone.strip() for zone in self._setting(CONF_ZONES).split(",") if zone.strip()]
+        return self._entities(CONF_ZONES)
 
     @property
     def _switch(self) -> str:
-        return self._setting(CONF_SWITCH)
+        return next(iter(self._entities(CONF_SWITCH)), "")
 
     @property
     def _todo(self) -> str:
-        return self._setting(CONF_TODO, DEFAULT_TODO)
+        return next(iter(self._entities(CONF_TODO, DEFAULT_TODO)), DEFAULT_TODO)
 
     @property
     def _phrases(self) -> Phrases:
@@ -164,6 +183,11 @@ class ShoppingListProvider(PluginProvider):
 
     async def loaded_in_mass(self) -> None:
         """Start watching the zones, the switch and the player's queue."""
+        if misspelled := self._misspelled():
+            self.logger.warning(
+                "Ignoring settings that are no Home Assistant entity id, like person.alex: %s",
+                ", ".join(misspelled),
+            )
         if not self._player_id:
             self.logger.warning("Choose the player in the settings of the plugin")
             return
@@ -348,13 +372,28 @@ class ShoppingListProvider(PluginProvider):
         try:
             self._list.update(await get_open_items(self._hass(), self._todo))
         except Exception as err:  # noqa: BLE001 - the last known list is used instead
-            self.logger.warning("Could not fetch %s: %s", self._todo, err)
+            self.logger.warning(
+                "Could not fetch %s, is it the entity id of a to-do list in Home Assistant? %s",
+                self._todo,
+                err,
+            )
 
     async def _announce(self, text: str) -> None:
         """Speak a text on the player, over the music."""
+        engine = await resolve_tts_engine_setting(self.mass, self.config.get_value(CONF_TTS))
+        if engine is None:
+            self.logger.warning(
+                "Could not announce %r: choose a text-to-speech engine in the settings of the "
+                "plugin; the Home Assistant plugin offers each tts entity of Home Assistant",
+                text,
+            )
+            return
         try:
             await self.mass.players.play_announcement(
-                self._player_id, message=text, language=self._phrases.tts_language
+                self._player_id,
+                message=text,
+                tts_engine=engine.uid,
+                language=self._phrases.tts_language,
             )
         except Exception as err:  # noqa: BLE001 - nothing else to do than to log it
             self.logger.warning("Could not announce %r: %s", text, err)

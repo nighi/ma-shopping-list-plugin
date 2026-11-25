@@ -7,12 +7,26 @@ entries of a to-do list, which the plugin also ticks off or deletes.
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING, Any
 
 from .shopping import TodoItem
 
 if TYPE_CHECKING:
     from hass_client import HomeAssistantClient
+
+
+# a Home Assistant entity id: the domain, a dot and the object id, such as person.alex
+ENTITY_ID = re.compile(r"[a-z0-9_]+\.[a-z0-9_]+")
+
+
+def is_entity_id(value: str) -> bool:
+    """
+    Return whether a text is shaped like a Home Assistant entity id.
+
+    :param value: The text, such as ``person.alex``.
+    """
+    return ENTITY_ID.fullmatch(value) is not None
 
 
 class EntityStates:
