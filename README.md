@@ -27,7 +27,9 @@ Outside the zones your buttons work as usual, unless you start shopping mode by 
 Music Assistant has no way yet for a plugin to take over the buttons of a player. The plugin
 therefore watches what a press did to the player's queue and undoes it:
 
-- **pause:** playback is resumed right away and the entry is read. You hear a short gap.
+- **pause:** playback is resumed right away and the entry is read. You hear a short gap. Some
+  players cannot pause (Music Assistant then stops them), so for them a stop in the middle of a
+  track counts as this press as well.
 - **next / previous:** the queue goes back to the track and position it was at, and the entry is
   ticked off or skipped. You may hear a short jump.
 

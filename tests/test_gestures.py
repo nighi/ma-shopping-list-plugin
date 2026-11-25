@@ -25,6 +25,13 @@ def test_pause_reads() -> None:
     assert detect_gesture(snap(3, 60), after, NOW) == Detection(Gesture.READ)
 
 
+def test_stop_of_a_player_that_cannot_pause_reads() -> None:
+    """A player that cannot pause is stopped instead: that reads too, but not at the end."""
+    after = snap(3, 60, PlaybackState.IDLE)
+    assert detect_gesture(snap(3, 60), after, NOW) == Detection(Gesture.READ)
+    assert detect_gesture(snap(3, 195), snap(3, 195, PlaybackState.IDLE), NOW) is None
+
+
 def test_next_completes_and_restores_position() -> None:
     """Next before the end of the item: tick off, and go back to where the music was."""
     before = snap(3, 60, taken_at=NOW - 2)

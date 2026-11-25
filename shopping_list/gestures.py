@@ -4,7 +4,8 @@ Recognise headphone button presses from the changes of a player queue.
 Music Assistant has no way for a plugin to take over the transport commands of a player, so the
 plugin watches what the commands did to the queue instead:
 
-- one press (play/pause) pauses the queue at the same item: read the current entry;
+- one press (play/pause) pauses the queue at the same item: read the current entry; a player
+  that cannot pause is stopped instead, which counts the same when the item was not about to end;
 - two presses (next) move the queue one item forward before the item ended: tick the entry off;
 - three presses (previous) move the queue one item back, or restart the current item: skip the
   entry.
@@ -104,6 +105,10 @@ def _same_item(
         return None
     if after.state == PlaybackState.PAUSED:
         return Detection(Gesture.READ)
+    if after.state == PlaybackState.IDLE:
+        # Music Assistant stops a player that cannot pause; at the end of the item the queue
+        # just ended
+        return None if near_end else Detection(Gesture.READ)
     # previous restarts the item once a few seconds played
     restarted = (
         after.queue_item_id == before.queue_item_id

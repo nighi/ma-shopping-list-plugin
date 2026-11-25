@@ -72,6 +72,10 @@ DEFAULT_TODO = "todo.shopping_list"
 # button presses: changes within this many seconds after a press are not looked at
 OWN_CHANGES_SECONDS = 4.0
 AFTER_ANNOUNCEMENT_SECONDS = 1.5
+# how long a press waits for the music to play again before the entry is read anyway
+RESUME_TIMEOUT = 8.0
+# how long the music plays again before the announcement starts
+SETTLE_SECONDS = 2.0
 # the Home Assistant domains each entity setting offers to choose from
 ENTITY_DOMAINS: dict[str, set[str]] = {
     CONF_PERSON: {"person"},
@@ -383,6 +387,8 @@ class ShoppingListProvider(PluginProvider):
             event.event != EventType.QUEUE_UPDATED
             or before is None
             or not self._mode.on
+            # what the plugin does itself while it handles a press is no press
+            or self._lock.locked()
             or now < self._ignore_until
         ):
             return
@@ -402,6 +408,10 @@ class ShoppingListProvider(PluginProvider):
                     )
                 elif detection.gesture == Gesture.READ:
                     await self.mass.players.cmd_play(self._player_id)
+                # the announcement goes over the music, so the music has to play first;
+                # one that starts while the music stream is still being set up loses its words
+                if await self._wait_until_playing(queue_id):
+                    await asyncio.sleep(SETTLE_SECONDS)
             except Exception as err:  # noqa: BLE001 - the entry is still read when this fails
                 self.logger.warning("Could not put the music back: %s", err)
             self._ignore_until = time.time() + OWN_CHANGES_SECONDS
@@ -409,6 +419,17 @@ class ShoppingListProvider(PluginProvider):
             await self._announce(text)
             # an announcement can change the queue's state for a moment as well
             self._ignore_until = max(self._ignore_until, time.time() + AFTER_ANNOUNCEMENT_SECONDS)
+
+    async def _wait_until_playing(self, queue_id: str) -> bool:
+        """Wait until the queue plays again, at most a few seconds, and return whether it does."""
+        deadline = time.time() + RESUME_TIMEOUT
+        while time.time() < deadline:
+            queue = self.mass.player_queues.get(queue_id)
+            if queue is not None and queue.state == PlaybackState.PLAYING:
+                return True
+            await asyncio.sleep(0.25)
+        self.logger.debug("The music did not play again within %s s", RESUME_TIMEOUT)
+        return False
 
     async def _respond(self, gesture: Gesture) -> str:
         """Do what a press asks for with the list and return what to say."""
