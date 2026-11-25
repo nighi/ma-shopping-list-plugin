@@ -6,7 +6,8 @@ plugin watches what the commands did to the queue instead:
 
 - one press (play/pause) pauses the queue at the same item: read the current entry; a player
   that cannot pause is stopped instead, which counts the same when the item was not about to end;
-- two presses (next) move the queue one item forward before the item ended: tick the entry off;
+- two presses (next) move the queue to its next item before the item ended: tick the entry off;
+  a queue without a next item does not move at all, so then the press cannot be seen;
 - three presses (previous) move the queue one item back, or restart the current item: skip the
   entry.
 
@@ -46,6 +47,8 @@ class QueueSnapshot:
     elapsed: float
     duration: int | None
     taken_at: float
+    # the item the queue plays after this one: with repeat on, the first after the last
+    next_queue_item_id: str | None = None
 
     def elapsed_at(self, now: float) -> float:
         """
@@ -81,7 +84,10 @@ def detect_gesture(before: QueueSnapshot, after: QueueSnapshot, now: float) -> D
     near_end = bool(before.duration) and position >= (before.duration or 0) - END_MARGIN
     if after.index == before.index:
         return _same_item(before, after, position, near_end=near_end)
-    if after.index == before.index + 1 and not near_end:
+    to_next = after.index == before.index + 1 or (
+        before.next_queue_item_id is not None and after.queue_item_id == before.next_queue_item_id
+    )
+    if to_next and not near_end:
         # a move at the end of the item is the item ending by itself
         return Detection(Gesture.COMPLETE, before.index, position)
     if after.index == before.index - 1:

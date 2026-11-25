@@ -376,6 +376,7 @@ class ShoppingListProvider(PluginProvider):
             elapsed=queue.corrected_elapsed_time,
             duration=item.duration if item else None,
             taken_at=now,
+            next_queue_item_id=queue.next_item.queue_item_id if queue.next_item else None,
         )
         before, self._snapshot = self._snapshot, snapshot
         if before is None or (before.index, before.state, before.queue_item_id) != (

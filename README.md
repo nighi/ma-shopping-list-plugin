@@ -37,6 +37,10 @@ On a player that cannot speak over the music (Music Assistant then stops the mus
 announcement), the music is halted once, the entry is said and the music goes on where it was:
 switching back and forth between music and announcement more often made such players lose words.
 
+Two and three presses can only be seen when they move the queue: keep something after the
+current track, such as a playlist, **repeat** or **Don't stop the music**. On the last track of a
+queue without repeat, next does nothing, so there is nothing to see.
+
 A track that ends by itself is not taken for a press. Any pause, next or previous on that player
 while you are in the zone counts, also one from the app.
 

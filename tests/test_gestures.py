@@ -38,6 +38,12 @@ def test_next_completes_and_restores_position() -> None:
     assert detect_gesture(before, snap(4, 0), NOW) == Detection(Gesture.COMPLETE, 3, 62)
 
 
+def test_next_from_the_last_item_with_repeat_completes() -> None:
+    """With repeat on, next from the last item goes to the first: the announced next item."""
+    before = QueueSnapshot(9, "item9", PLAYING, 60, 200, NOW, next_queue_item_id="item0")
+    assert detect_gesture(before, snap(0, 0), NOW) == Detection(Gesture.COMPLETE, 9, 60)
+
+
 def test_item_ending_is_no_press() -> None:
     """The queue moving on at the end of an item is not a press."""
     assert detect_gesture(snap(3, 195), snap(4, 0), NOW) is None
