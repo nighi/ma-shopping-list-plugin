@@ -56,6 +56,32 @@ OWN_CHANGES_SECONDS = 4.0
 AFTER_ANNOUNCEMENT_SECONDS = 1.5
 
 
+def config_entries(players: list[ConfigValueOption]) -> tuple[ConfigEntry, ...]:
+    """
+    Return the settings of the plugin.
+
+    The player, the person and the zones are optional, so the plugin can be added before the
+    phone is known to Music Assistant; until they are filled in, the plugin waits.
+
+    :param players: The players to choose from.
+    """
+    return (
+        ConfigEntry(key=CONF_PLAYER, type=ConfigEntryType.STRING, options=players, required=False),
+        ConfigEntry(key=CONF_PERSON, type=ConfigEntryType.STRING, required=False),
+        ConfigEntry(key=CONF_ZONES, type=ConfigEntryType.STRING, required=False),
+        ConfigEntry(key=CONF_TODO, type=ConfigEntryType.STRING, default_value=DEFAULT_TODO),
+        ConfigEntry(
+            key=CONF_REMOVE, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
+        ),
+        ConfigEntry(
+            key=CONF_LANGUAGE,
+            type=ConfigEntryType.STRING,
+            default_value=DEFAULT_LANGUAGE,
+            options=[ConfigValueOption(language) for language in PHRASES],
+        ),
+    )
+
+
 async def setup(
     mass: MusicAssistant, manifest: ProviderManifest, config: ProviderConfig
 ) -> ProviderInstanceType:
@@ -88,21 +114,7 @@ class ShoppingListProvider(PluginProvider):
             ConfigValueOption(player.player_id, player.name)
             for player in self.mass.players.all_players(return_unavailable=True)
         ]
-        return (
-            ConfigEntry(key=CONF_PLAYER, type=ConfigEntryType.STRING, options=players),
-            ConfigEntry(key=CONF_PERSON, type=ConfigEntryType.STRING),
-            ConfigEntry(key=CONF_ZONES, type=ConfigEntryType.STRING),
-            ConfigEntry(key=CONF_TODO, type=ConfigEntryType.STRING, default_value=DEFAULT_TODO),
-            ConfigEntry(
-                key=CONF_REMOVE, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
-            ),
-            ConfigEntry(
-                key=CONF_LANGUAGE,
-                type=ConfigEntryType.STRING,
-                default_value=DEFAULT_LANGUAGE,
-                options=[ConfigValueOption(language) for language in PHRASES],
-            ),
-        )
+        return config_entries(players)
 
     def _setting(self, key: str, default: str = "") -> str:
         """Return a text setting, stripped of spaces."""
