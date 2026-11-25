@@ -265,6 +265,7 @@ class ShoppingListProvider(PluginProvider):
                 self._on_queue_event, (EventType.QUEUE_UPDATED, EventType.QUEUE_TIME_UPDATED)
             )
         )
+        self.logger.info("Listening to the buttons of %s", self._player_id)
 
     async def unload(self, is_removed: bool = False) -> None:  # noqa: FBT001, FBT002
         """Stop watching."""
@@ -363,6 +364,21 @@ class ShoppingListProvider(PluginProvider):
             taken_at=now,
         )
         before, self._snapshot = self._snapshot, snapshot
+        if before is None or (before.index, before.state, before.queue_item_id) != (
+            snapshot.index,
+            snapshot.state,
+            snapshot.queue_item_id,
+        ):
+            # what a press does to the queue differs between apps: this shows it in the log
+            self.logger.debug(
+                "Queue %s: %s, index %s, %.1f of %s s (%s)",
+                queue_id,
+                snapshot.state,
+                snapshot.index,
+                snapshot.elapsed,
+                snapshot.duration,
+                event.event,
+            )
         if (
             event.event != EventType.QUEUE_UPDATED
             or before is None
@@ -371,6 +387,7 @@ class ShoppingListProvider(PluginProvider):
         ):
             return
         if detection := detect_gesture(before, snapshot, now):
+            self.logger.debug("Recognised %s", detection)
             self._ignore_until = now + OWN_CHANGES_SECONDS
             self.mass.create_task(self._handle(queue_id, detection))
 
