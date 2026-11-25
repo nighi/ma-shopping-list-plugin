@@ -83,3 +83,28 @@ class ShoppingList:
         if len(self._items) > 1:
             self._items.append(self._items.pop(0))
         return self.current
+
+
+class ShoppingMode:
+    """
+    Whether shopping mode is on: while the person is in a zone, or while it was started by hand.
+
+    Leaving the zone does not end a mode that was started by hand.
+    """
+
+    def __init__(self) -> None:
+        """Start with shopping mode off."""
+        self.zone: str | None = None
+        self.manual = False
+        self._was_on = False
+
+    @property
+    def on(self) -> bool:
+        """Return whether shopping mode is on."""
+        return self.zone is not None or self.manual
+
+    def switched(self) -> bool:
+        """Return whether shopping mode went on or off since the last call."""
+        switched = self.on != self._was_on
+        self._was_on = self.on
+        return switched

@@ -11,6 +11,7 @@ class Phrases:
 
     tts_language: str
     activated: str
+    activated_manual: str
     deactivated: str
     empty: str
     completed: str
@@ -24,6 +25,7 @@ PHRASES: dict[str, Phrases] = {
     "de": Phrases(
         tts_language="de-DE",
         activated="Einkaufsmodus bei {}. {} Artikel auf der Liste.",
+        activated_manual="Einkaufsmodus aktiv. {} Artikel auf der Liste.",
         deactivated="Einkaufsmodus beendet.",
         empty="Die Einkaufsliste ist leer.",
         completed="{} erledigt. Nächster: {}.",
@@ -35,6 +37,7 @@ PHRASES: dict[str, Phrases] = {
     "en": Phrases(
         tts_language="en-US",
         activated="Shopping mode at {}. {} items on the list.",
+        activated_manual="Shopping mode on. {} items on the list.",
         deactivated="Shopping mode ended.",
         empty="The shopping list is empty.",
         completed="{} done. Next: {}.",

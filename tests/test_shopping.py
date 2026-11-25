@@ -4,7 +4,7 @@ from typing import Any
 
 from shopping_list.home_assistant import EntityStates, finish_item, get_open_items
 from shopping_list.phrases import get_phrases
-from shopping_list.shopping import ShoppingList, TodoItem
+from shopping_list.shopping import ShoppingList, ShoppingMode, TodoItem
 
 MILK, BREAD, EGGS = TodoItem("Milk", "1"), TodoItem("Bread", "2"), TodoItem("Eggs", "3")
 
@@ -104,3 +104,26 @@ def test_unknown_language_falls_back_to_german() -> None:
     """An unknown language speaks German."""
     assert get_phrases("xx").tts_language == "de-DE"
     assert get_phrases("en").tts_language == "en-US"
+
+
+def is_on(mode: ShoppingMode) -> bool:
+    """Return whether shopping mode is on, read anew each time."""
+    return mode.on
+
+
+def test_shopping_mode_from_zone_or_by_hand() -> None:
+    """Shopping mode is on in a zone or by hand; only going on or off counts as a switch."""
+    mode = ShoppingMode()
+    assert not is_on(mode)
+    assert not mode.switched()
+    mode.manual = True
+    assert is_on(mode)
+    assert mode.switched()
+    mode.zone = "Shop"
+    assert not mode.switched()
+    mode.manual = False
+    assert is_on(mode)
+    assert not mode.switched()
+    mode.zone = None
+    assert not is_on(mode)
+    assert mode.switched()

@@ -18,7 +18,11 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, cast
 
-from music_assistant_models.config_entries import ConfigEntry, ConfigValueOption
+from music_assistant_models.config_entries import (
+    ConfigActionResult,
+    ConfigEntry,
+    ConfigValueOption,
+)
 from music_assistant_models.enums import ConfigEntryType, EventType, PlaybackState
 from music_assistant_models.errors import SetupFailedError
 
@@ -27,7 +31,7 @@ from music_assistant.models.plugin import PluginProvider
 from .gestures import Detection, Gesture, QueueSnapshot, detect_gesture
 from .home_assistant import EntityStates, finish_item, get_open_items
 from .phrases import DEFAULT_LANGUAGE, PHRASES, Phrases, get_phrases
-from .shopping import ShoppingList, TodoItem
+from .shopping import ShoppingList, ShoppingMode, TodoItem
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -49,6 +53,9 @@ CONF_ZONES = "zone_entities"
 CONF_TODO = "todo_entity"
 CONF_REMOVE = "remove_items"
 CONF_LANGUAGE = "language"
+CONF_SWITCH = "switch_entity"
+ACTION_START = "start_shopping"
+ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
 # the queue changes the plugin causes itself, by putting the queue back or resuming it, are no
 # button presses: changes within this many seconds after a press are not looked at
@@ -60,8 +67,10 @@ def config_entries(players: list[ConfigValueOption]) -> tuple[ConfigEntry, ...]:
     """
     Return the settings of the plugin.
 
-    The player, the person and the zones are optional, so the plugin can be added before the
-    phone is known to Music Assistant; until they are filled in, the plugin waits.
+    Everything without a default is optional, so the plugin can be added before the phone is
+    known to Music Assistant; until a player is chosen, the plugin waits. The person and the
+    zones are only needed to start shopping mode by location, the switch only to start it from
+    Home Assistant.
 
     :param players: The players to choose from.
     """
@@ -69,6 +78,13 @@ def config_entries(players: list[ConfigValueOption]) -> tuple[ConfigEntry, ...]:
         ConfigEntry(key=CONF_PLAYER, type=ConfigEntryType.STRING, options=players, required=False),
         ConfigEntry(key=CONF_PERSON, type=ConfigEntryType.STRING, required=False),
         ConfigEntry(key=CONF_ZONES, type=ConfigEntryType.STRING, required=False),
+        ConfigEntry(key=CONF_SWITCH, type=ConfigEntryType.STRING, required=False),
+        ConfigEntry(
+            key=ACTION_START, type=ConfigEntryType.ACTION, action=ACTION_START, required=False
+        ),
+        ConfigEntry(
+            key=ACTION_STOP, type=ConfigEntryType.ACTION, action=ACTION_STOP, required=False
+        ),
         ConfigEntry(key=CONF_TODO, type=ConfigEntryType.STRING, default_value=DEFAULT_TODO),
         ConfigEntry(
             key=CONF_REMOVE, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
@@ -100,7 +116,7 @@ class ShoppingListProvider(PluginProvider):
         super().__init__(*args, **kwargs)
         self._list = ShoppingList()
         self._states = EntityStates()
-        self._zone: str | None = None
+        self._mode = ShoppingMode()
         self._snapshot: QueueSnapshot | None = None
         self._ignore_until = 0.0
         self._lock = asyncio.Lock()
@@ -133,6 +149,10 @@ class ShoppingListProvider(PluginProvider):
         return [zone.strip() for zone in self._setting(CONF_ZONES).split(",") if zone.strip()]
 
     @property
+    def _switch(self) -> str:
+        return self._setting(CONF_SWITCH)
+
+    @property
     def _todo(self) -> str:
         return self._setting(CONF_TODO, DEFAULT_TODO)
 
@@ -143,16 +163,17 @@ class ShoppingListProvider(PluginProvider):
     # lifecycle
 
     async def loaded_in_mass(self) -> None:
-        """Start watching the zones and the player's queue."""
-        if not (self._player_id and self._person and self._zones):
-            self.logger.warning(
-                "Choose the player, the person and the zones in the settings of the plugin"
-            )
+        """Start watching the zones, the switch and the player's queue."""
+        if not self._player_id:
+            self.logger.warning("Choose the player in the settings of the plugin")
             return
-        hass = self._hass()
-        self._unsubscribers.append(
-            await hass.subscribe_entities(self._on_entities, [self._person, *self._zones])
-        )
+        zones = [self._person, *self._zones] if self._person and self._zones else []
+        if entities := [*zones, *([self._switch] if self._switch else [])]:
+            self._unsubscribers.append(
+                await self._hass().subscribe_entities(self._on_entities, entities)
+            )
+        else:
+            self.logger.info("No zones or switch set: start shopping mode in the settings")
         self._unsubscribers.append(
             self.mass.subscribe(
                 self._on_queue_event, (EventType.QUEUE_UPDATED, EventType.QUEUE_TIME_UPDATED)
@@ -173,25 +194,55 @@ class ShoppingListProvider(PluginProvider):
             raise SetupFailedError(msg)
         return cast("HomeAssistantProvider", provider).hass
 
-    # zones
+    # shopping mode
+
+    async def handle_config_action(
+        self, action: str
+    ) -> tuple[ConfigEntry, ...] | ConfigActionResult | None:
+        """Start or end shopping mode with the buttons in the settings."""
+        if action not in {ACTION_START, ACTION_STOP}:
+            return await super().handle_config_action(action)
+        start = action == ACTION_START
+        if self._switch:
+            # the switch is the one place that says whether shopping mode was started by hand;
+            # its new state comes back through the subscription
+            await self._hass().call_service(
+                "homeassistant",
+                "turn_on" if start else "turn_off",
+                target={"entity_id": self._switch},
+            )
+        else:
+            self._mode.manual = start
+            self._mode_changed()
+        key = "started" if start else "stopped"
+        return ConfigActionResult(message=f"Shopping mode {key}.", translation_key=key)
 
     def _on_entities(self, message: dict[str, Any]) -> None:
-        """Follow the person and the zones, and start or end shopping mode."""
+        """Follow the person, the zones and the switch."""
         self._states.apply(message)
-        zone = self._states.zone_of(self._person, self._zones)
-        if zone == self._zone:
-            return
-        self._zone = zone
-        self.logger.info("Shopping mode %s", f"on at {zone}" if zone else "off")
-        self.mass.create_task(self._on_zone_changed(zone))
+        self._mode.zone = self._states.zone_of(self._person, self._zones)
+        if self._switch:
+            self._mode.manual = self._states.states.get(self._switch) == "on"
+        self._mode_changed()
 
-    async def _on_zone_changed(self, zone: str | None) -> None:
+    def _mode_changed(self) -> None:
+        """Say when shopping mode went on or off."""
+        if not self._mode.switched():
+            return
+        self.logger.info("Shopping mode %s", "on" if self._mode.on else "off")
+        self.mass.create_task(self._announce_mode())
+
+    async def _announce_mode(self) -> None:
         """Say that shopping mode started or ended, when the player plays."""
-        if zone:
+        phrases = self._phrases
+        if self._mode.on:
             await self._refresh()
-            text = self._phrases.activated.format(zone, len(self._list))
+            if self._mode.zone:
+                text = phrases.activated.format(self._mode.zone, len(self._list))
+            else:
+                text = phrases.activated_manual.format(len(self._list))
         else:
-            text = self._phrases.deactivated
+            text = phrases.deactivated
         if self._player_plays():
             await self._announce(text)
 
@@ -229,7 +280,7 @@ class ShoppingListProvider(PluginProvider):
         if (
             event.event != EventType.QUEUE_UPDATED
             or before is None
-            or self._zone is None
+            or not self._mode.on
             or now < self._ignore_until
         ):
             return

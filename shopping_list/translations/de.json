@@ -16,6 +16,18 @@
       "label": "Supermarkt-Zonen",
       "description": "Die Home-Assistant-Zonen, in denen der Einkaufsmodus aktiv ist, mit Komma getrennt, z. B. zone.supermarkt, zone.markt."
     },
+    "switch_entity": {
+      "label": "Schalter für den Einkaufsmodus (optional)",
+      "description": "Ein Home-Assistant-Schalter, z. B. input_boolean.einkaufsmodus. Solange er an ist, ist der Einkaufsmodus aktiv, egal wo du bist: schaltbar per Widget, Sprachbefehl oder Automation. Die Knöpfe unten schalten ihn dann mit."
+    },
+    "start_shopping": {
+      "label": "Einkaufsmodus jetzt starten",
+      "description": "Startet den Einkaufsmodus auch außerhalb der Zonen. Er bleibt an, bis du ihn beendest; ohne Schalter endet er beim Neustart des Plugins, auch nach dem Speichern der Einstellungen."
+    },
+    "stop_shopping": {
+      "label": "Einkaufsmodus beenden",
+      "description": "Beendet einen von Hand gestarteten Einkaufsmodus. In einer Zone bleibt er an, bis du sie verlässt."
+    },
     "todo_entity": {
       "label": "Einkaufsliste",
       "description": "Die Home-Assistant-To-do-Liste, die vorgelesen wird, z. B. todo.shopping_list."
@@ -31,5 +43,9 @@
         "en": "Englisch"
       }
     }
+  },
+  "config_actions": {
+    "started": "Einkaufsmodus gestartet.",
+    "stopped": "Einkaufsmodus beendet."
   }
 }

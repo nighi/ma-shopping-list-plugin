@@ -10,11 +10,12 @@ while you are in a supermarket. The music keeps playing.
 | press twice (next)         | next track     | the entry is ticked off (or deleted), the next one is read |
 | press three times (previous) | previous track | the entry moves to the end of the list                   |
 
-Outside the zones your buttons work as usual.
+Outside the zones your buttons work as usual, unless you start shopping mode by hand.
 
 ## How it works
 
-- Shopping mode is on while a Home Assistant **person** is in one of the chosen **zones**.
+- Shopping mode is on while a Home Assistant **person** is in one of the chosen **zones**, or
+  while you started it **by hand** (see below).
 - The entries come from a Home Assistant **to-do list** (`todo.get_items`) and are ticked off with
   `todo.update_item` (or deleted with `todo.remove_item`).
 - Entries are spoken as **announcements** on your player, over the music.
@@ -53,11 +54,28 @@ Music Assistant itself, which is to be discussed with its maintainers.
 1. In Music Assistant, open **Settings → Plugins → Add** and choose **Shopping list**.
 2. Fill in:
    - **Player:** the player your headphones are connected to (your phone).
-   - **Person:** e.g. `person.alex`.
+   - **Person:** e.g. `person.alex`. Person and zones are only needed to start shopping mode by
+     location.
    - **Supermarket zones:** e.g. `zone.supermarket, zone.market`.
+   - **Switch for shopping mode:** optional, e.g. `input_boolean.shopping_mode`.
    - **Shopping list:** e.g. `todo.shopping_list`.
    - **Delete entries instead of ticking them off:** off by default.
    - **Language of the announcements:** German or English.
+
+## Starting shopping mode by hand
+
+Shopping mode can also be on outside of the zones, for example in a shop you have no zone for:
+
+- **Buttons in the settings:** *Start shopping mode now* and *End shopping mode*. Without a switch
+  (below), shopping mode started this way ends when the plugin restarts, also after saving its
+  settings.
+- **A switch in Home Assistant** (optional): create a toggle helper, such as
+  `input_boolean.shopping_mode` (*Settings → Devices & services → Helpers → Create helper →
+  Toggle*), and enter it as *Switch for shopping mode*. While it is on, shopping mode is on. Switch
+  it from a dashboard, a phone widget, by voice or from an automation; the buttons in the
+  settings switch it too, and it survives restarts.
+
+Leaving a zone does not end shopping mode that was started by hand.
 
 ## Development
 
