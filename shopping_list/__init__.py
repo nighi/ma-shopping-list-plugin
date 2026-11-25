@@ -23,7 +23,12 @@ from music_assistant_models.config_entries import (
     ConfigEntry,
     ConfigValueOption,
 )
-from music_assistant_models.enums import ConfigEntryType, EventType, PlaybackState
+from music_assistant_models.enums import (
+    ConfigEntryType,
+    EventType,
+    PlaybackState,
+    PlayerFeature,
+)
 from music_assistant_models.errors import SetupFailedError
 
 from music_assistant.helpers.plugin_engines import (
@@ -72,7 +77,6 @@ DEFAULT_TODO = "todo.shopping_list"
 # the queue changes the plugin causes itself, by putting the queue back or resuming it, are no
 # button presses: changes within this many seconds after a press are not looked at
 OWN_CHANGES_SECONDS = 4.0
-AFTER_ANNOUNCEMENT_SECONDS = 1.5
 # how long a press waits for the music to play again before the entry is read anyway
 RESUME_TIMEOUT = 8.0
 # how long the music plays again before the announcement starts
@@ -402,27 +406,61 @@ class ShoppingListProvider(PluginProvider):
             self.mass.create_task(self._handle(queue_id, detection))
 
     async def _handle(self, queue_id: str, detection: Detection) -> None:
-        """Put the music back the way it was, do what the press asks for and say the result."""
+        """Do what a press asks for and say the result, with the music the way it was."""
         async with self._lock:
             self.logger.debug("Button press: %s", detection)
-            try:
-                if detection.restore_index is not None:
-                    await self.mass.player_queues.play_index(
-                        queue_id, detection.restore_index, seek_position=detection.restore_position
-                    )
-                elif detection.gesture == Gesture.READ:
-                    await self.mass.players.cmd_play(self._player_id)
-                # the announcement goes over the music, so the music has to play first;
-                # one that starts while the music stream is still being set up loses its words
-                if await self._wait_until_playing(queue_id):
-                    await asyncio.sleep(SETTLE_SECONDS)
-            except Exception as err:  # noqa: BLE001 - the entry is still read when this fails
-                self.logger.warning("Could not put the music back: %s", err)
+            if self._announces_natively():
+                await self._handle_over_music(queue_id, detection)
+            else:
+                await self._handle_in_silence(queue_id, detection)
+            # the queue changes that putting the music back causes arrive a little later
             self._ignore_until = time.time() + OWN_CHANGES_SECONDS
-            text = await self._respond(detection.gesture)
-            await self._announce(text)
-            # an announcement can change the queue's state for a moment as well
-            self._ignore_until = max(self._ignore_until, time.time() + AFTER_ANNOUNCEMENT_SECONDS)
+
+    def _announces_natively(self) -> bool:
+        """Return whether the player speaks an announcement over the music by itself."""
+        player = self.mass.players.get_player(self._player_id)
+        return player is not None and PlayerFeature.PLAY_ANNOUNCEMENT in player.supported_features
+
+    async def _handle_over_music(self, queue_id: str, detection: Detection) -> None:
+        """Put the music back first, then speak over it, for a player that lowers the music."""
+        try:
+            await self._resume(queue_id, detection)
+            # one that starts while the music stream is still being set up loses its words
+            if await self._wait_until_playing(queue_id):
+                await asyncio.sleep(SETTLE_SECONDS)
+        except Exception as err:  # noqa: BLE001 - the entry is still read when this fails
+            self.logger.warning("Could not put the music back: %s", err)
+        await self._announce(await self._respond(detection.gesture))
+
+    async def _handle_in_silence(self, queue_id: str, detection: Detection) -> None:
+        """
+        Halt the music, speak, then put the music back, for a player without own announcements.
+
+        Music Assistant stops such a player for an announcement and starts it again afterwards.
+        Every switch between music and announcement is a chance for the player to lose the
+        words, so the music is halted once, before the announcement, and put back once, after.
+        """
+        try:
+            if detection.gesture != Gesture.READ:
+                # the press already halted the music for reading; this also cancels the move
+                # to another track that a next or previous still has pending
+                await self.mass.player_queues.pause(queue_id)
+        except Exception as err:  # noqa: BLE001 - the entry is still said when this fails
+            self.logger.warning("Could not halt the music: %s", err)
+        await self._announce(await self._respond(detection.gesture))
+        try:
+            await self._resume(queue_id, detection)
+        except Exception as err:  # noqa: BLE001 - nothing else to do than to log it
+            self.logger.warning("Could not put the music back: %s", err)
+
+    async def _resume(self, queue_id: str, detection: Detection) -> None:
+        """Play the music again, at the track and position it was at before the press."""
+        if detection.restore_index is not None:
+            await self.mass.player_queues.play_index(
+                queue_id, detection.restore_index, seek_position=detection.restore_position
+            )
+        elif detection.gesture == Gesture.READ:
+            await self.mass.players.cmd_play(self._player_id)
 
     async def _wait_until_playing(self, queue_id: str) -> bool:
         """Wait until the queue plays again, at most a few seconds, and return whether it does."""

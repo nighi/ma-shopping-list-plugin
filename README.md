@@ -33,6 +33,10 @@ therefore watches what a press did to the player's queue and undoes it:
 - **next / previous:** the queue goes back to the track and position it was at, and the entry is
   ticked off or skipped. You may hear a short jump.
 
+On a player that cannot speak over the music (Music Assistant then stops the music for an
+announcement), the music is halted once, the entry is said and the music goes on where it was:
+switching back and forth between music and announcement more often made such players lose words.
+
 A track that ends by itself is not taken for a press. Any pause, next or previous on that player
 while you are in the zone counts, also one from the app.
 
