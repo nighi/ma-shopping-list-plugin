@@ -46,6 +46,10 @@
     "tts_engine": {
       "label": "Text-to-speech engine",
       "description": "The voice that reads the entries. Home Assistant offers each of its text-to-speech entities here, such as Google Translate or Piper."
+    },
+    "chime": {
+      "label": "Chime before announcements",
+      "description": "Play a short chime before each entry is read."
     }
   },
   "config_actions": {

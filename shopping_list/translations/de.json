@@ -46,6 +46,10 @@
     "tts_engine": {
       "label": "Sprachausgabe",
       "description": "Die Stimme, die die Einträge vorliest. Home Assistant bietet hier jede seiner Text-to-Speech-Entitäten an, z. B. Google Translate oder Piper."
+    },
+    "chime": {
+      "label": "Gong vor den Ansagen",
+      "description": "Vor jedem vorgelesenen Eintrag einen kurzen Gong abspielen."
     }
   },
   "config_actions": {

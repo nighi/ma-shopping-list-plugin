@@ -65,6 +65,7 @@ CONF_REMOVE = "remove_items"
 CONF_LANGUAGE = "language"
 CONF_SWITCH = "switch_entity"
 CONF_TTS = "tts_engine"
+CONF_CHIME = "chime"
 ACTION_START = "start_shopping"
 ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
@@ -143,6 +144,9 @@ def config_entries(
             type=ConfigEntryType.STRING,
             default_value=DEFAULT_LANGUAGE,
             options=[ConfigValueOption(language) for language in PHRASES],
+        ),
+        ConfigEntry(
+            key=CONF_CHIME, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
         ),
     )
 
@@ -492,6 +496,7 @@ class ShoppingListProvider(PluginProvider):
             await self.mass.players.play_announcement(
                 self._player_id,
                 message=text,
+                pre_announce=bool(self.config.get_value(CONF_CHIME)),
                 tts_engine=engine.uid,
                 language=self._phrases.tts_language,
             )
