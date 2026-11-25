@@ -14,7 +14,7 @@
     },
     "zone_entities": {
       "label": "Supermarket zones",
-      "description": "The Home Assistant zones in which shopping mode is on, separated by commas, such as zone.supermarket, zone.market."
+      "description": "The Home Assistant zones in which shopping mode is on, such as your supermarkets."
     },
     "switch_entity": {
       "label": "Switch for shopping mode (optional)",

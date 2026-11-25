@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Any
 
+from music_assistant_models.config_entries import ConfigValueOption
+
 from .shopping import TodoItem
 
 if TYPE_CHECKING:
@@ -27,6 +29,33 @@ def is_entity_id(value: str) -> bool:
     :param value: The text, such as ``person.alex``.
     """
     return ENTITY_ID.fullmatch(value) is not None
+
+
+def entity_options(
+    states: list[dict[str, Any]], domains: set[str], selected: list[str]
+) -> list[ConfigValueOption]:
+    """
+    Return the entities of some domains as options to choose from, sorted by name.
+
+    Chosen entities that Home Assistant does not list (any more) stay options, so opening the
+    settings never drops them.
+
+    :param states: The states of all entities, as ``get_states`` returns them.
+    :param domains: The domains to offer, such as ``{"zone"}``.
+    :param selected: The entity ids chosen so far.
+    """
+    titles: dict[str, str] = {}
+    for state in states:
+        entity_id = str(state.get("entity_id", ""))
+        if entity_id.split(".", 1)[0] in domains and is_entity_id(entity_id):
+            name = (state.get("attributes") or {}).get("friendly_name")
+            titles[entity_id] = f"{name} ({entity_id})" if name else entity_id
+    for entity_id in selected:
+        titles.setdefault(entity_id, entity_id)
+    return [
+        ConfigValueOption(entity_id, title)
+        for entity_id, title in sorted(titles.items(), key=lambda item: item[1].casefold())
+    ]
 
 
 class EntityStates:

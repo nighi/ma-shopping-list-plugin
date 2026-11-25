@@ -14,7 +14,7 @@
     },
     "zone_entities": {
       "label": "Supermarkt-Zonen",
-      "description": "Die Home-Assistant-Zonen, in denen der Einkaufsmodus aktiv ist, mit Komma getrennt, z. B. zone.supermarkt, zone.markt."
+      "description": "Die Home-Assistant-Zonen, in denen der Einkaufsmodus aktiv ist, z. B. deine Supermärkte."
     },
     "switch_entity": {
       "label": "Schalter für den Einkaufsmodus (optional)",

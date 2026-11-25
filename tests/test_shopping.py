@@ -2,7 +2,13 @@
 
 from typing import Any
 
-from shopping_list.home_assistant import EntityStates, finish_item, get_open_items, is_entity_id
+from shopping_list.home_assistant import (
+    EntityStates,
+    entity_options,
+    finish_item,
+    get_open_items,
+    is_entity_id,
+)
 from shopping_list.phrases import get_phrases
 from shopping_list.shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -136,3 +142,21 @@ def test_entity_ids() -> None:
     assert not is_entity_id("s")
     assert not is_entity_id("person.")
     assert not is_entity_id("Person.Alex")
+
+
+def test_entity_options() -> None:
+    """The entities of the asked domains are offered by name, chosen ones are always kept."""
+    states = [
+        {"entity_id": "zone.shop", "attributes": {"friendly_name": "Shop"}},
+        {"entity_id": "zone.home", "attributes": {"friendly_name": "Home"}},
+        {"entity_id": "person.alex", "attributes": {"friendly_name": "Alex"}},
+        {"entity_id": "zone.no_name", "attributes": {}},
+    ]
+    options = entity_options(states, {"zone"}, ["zone.gone"])
+    assert [(option.value, option.title) for option in options] == [
+        ("zone.home", "Home (zone.home)"),
+        ("zone.shop", "Shop (zone.shop)"),
+        ("zone.gone", "zone.gone"),
+        ("zone.no_name", "zone.no_name"),
+    ]
+    assert entity_options([], {"todo"}, []) == []

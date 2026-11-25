@@ -52,11 +52,12 @@ Music Assistant itself, which is to be discussed with its maintainers.
 ## Setup
 
 1. In Music Assistant, open **Settings → Plugins → Add** and choose **Shopping list**.
-2. Fill in:
+2. Fill in. The Home Assistant entities are offered to choose from; while Home Assistant is not
+   reachable, entity ids can be typed instead.
    - **Player:** the player your headphones are connected to (your phone).
    - **Person:** e.g. `person.alex`. Person and zones are only needed to start shopping mode by
      location.
-   - **Supermarket zones:** e.g. `zone.supermarket, zone.market`.
+   - **Supermarket zones:** one or more zones, e.g. `zone.supermarket` and `zone.market`.
    - **Switch for shopping mode:** optional, e.g. `input_boolean.shopping_mode`.
    - **Shopping list:** e.g. `todo.shopping_list`.
    - **Delete entries instead of ticking them off:** off by default.

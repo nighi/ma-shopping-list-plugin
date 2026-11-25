@@ -33,7 +33,13 @@ from music_assistant.helpers.plugin_engines import (
 from music_assistant.models.plugin import PluginProvider
 
 from .gestures import Detection, Gesture, QueueSnapshot, detect_gesture
-from .home_assistant import EntityStates, finish_item, get_open_items, is_entity_id
+from .home_assistant import (
+    EntityStates,
+    entity_options,
+    finish_item,
+    get_open_items,
+    is_entity_id,
+)
 from .phrases import DEFAULT_LANGUAGE, PHRASES, Phrases, get_phrases
 from .shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -66,31 +72,65 @@ DEFAULT_TODO = "todo.shopping_list"
 # button presses: changes within this many seconds after a press are not looked at
 OWN_CHANGES_SECONDS = 4.0
 AFTER_ANNOUNCEMENT_SECONDS = 1.5
+# the Home Assistant domains each entity setting offers to choose from
+ENTITY_DOMAINS: dict[str, set[str]] = {
+    CONF_PERSON: {"person"},
+    CONF_ZONES: {"zone"},
+    CONF_SWITCH: {"input_boolean", "switch"},
+    CONF_TODO: {"todo"},
+}
 
 
-def config_entries(players: list[ConfigValueOption]) -> tuple[ConfigEntry, ...]:
+def config_entries(
+    players: list[ConfigValueOption],
+    entities: dict[str, list[ConfigValueOption]] | None = None,
+) -> tuple[ConfigEntry, ...]:
     """
     Return the settings of the plugin.
 
     Everything without a default is optional, so the plugin can be added before the phone is
     known to Music Assistant; until a player is chosen, the plugin waits. The person and the
     zones are only needed to start shopping mode by location, the switch only to start it from
-    Home Assistant.
+    Home Assistant. Without the entities of Home Assistant to choose from, entity ids are typed.
 
     :param players: The players to choose from.
+    :param entities: Per entity setting, the entities of Home Assistant to choose from.
     """
+    options = entities or {}
     return (
         ConfigEntry(key=CONF_PLAYER, type=ConfigEntryType.STRING, options=players, required=False),
-        ConfigEntry(key=CONF_PERSON, type=ConfigEntryType.STRING, required=False),
-        ConfigEntry(key=CONF_ZONES, type=ConfigEntryType.STRING, required=False),
-        ConfigEntry(key=CONF_SWITCH, type=ConfigEntryType.STRING, required=False),
+        ConfigEntry(
+            key=CONF_PERSON,
+            type=ConfigEntryType.STRING,
+            options=options.get(CONF_PERSON, []),
+            required=False,
+        ),
+        ConfigEntry(
+            key=CONF_ZONES,
+            type=ConfigEntryType.STRING,
+            multi_value=True,
+            default_value=[],
+            options=options.get(CONF_ZONES, []),
+            required=False,
+        ),
+        ConfigEntry(
+            key=CONF_SWITCH,
+            type=ConfigEntryType.STRING,
+            options=options.get(CONF_SWITCH, []),
+            required=False,
+        ),
         ConfigEntry(
             key=ACTION_START, type=ConfigEntryType.ACTION, action=ACTION_START, required=False
         ),
         ConfigEntry(
             key=ACTION_STOP, type=ConfigEntryType.ACTION, action=ACTION_STOP, required=False
         ),
-        ConfigEntry(key=CONF_TODO, type=ConfigEntryType.STRING, default_value=DEFAULT_TODO),
+        ConfigEntry(
+            key=CONF_TODO,
+            type=ConfigEntryType.STRING,
+            default_value=DEFAULT_TODO,
+            options=options.get(CONF_TODO, []),
+        ),
         ConfigEntry(
             key=CONF_REMOVE, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
         ),
@@ -135,8 +175,24 @@ class ShoppingListProvider(PluginProvider):
             ConfigValueOption(player.player_id, player.name)
             for player in self.mass.players.all_players(return_unavailable=True)
         ]
+        states = await self._all_states()
+        entities = {
+            key: entity_options(states, domains, self._values(key))
+            for key, domains in ENTITY_DOMAINS.items()
+        }
         tts = await create_tts_engine_config_entries(self.mass, CONF_TTS, category="generic")
-        return (*config_entries(players), *tts)
+        return (*config_entries(players, entities), *tts)
+
+    async def _all_states(self) -> list[dict[str, Any]]:
+        """Return the states of all Home Assistant entities, or none when it is not reachable."""
+        try:
+            hass = self._hass()
+            if not hass.connected:
+                return []
+            return list(await hass.get_states())
+        except Exception as err:  # noqa: BLE001 - the settings then take typed entity ids
+            self.logger.debug("Could not list the entities of Home Assistant: %s", err)
+            return []
 
     def _setting(self, key: str, default: str = "") -> str:
         """Return a text setting, stripped of spaces."""
@@ -146,18 +202,24 @@ class ShoppingListProvider(PluginProvider):
     def _player_id(self) -> str:
         return self._setting(CONF_PLAYER)
 
+    def _values(self, key: str, default: str = "") -> list[str]:
+        """Return the values of a setting: a list, or a text with commas between the values."""
+        raw = self.config.get_value(key)
+        values = raw if isinstance(raw, list) else str(raw or default).split(",")
+        return [str(value).strip() for value in values if str(value).strip()]
+
     def _entities(self, key: str, default: str = "") -> list[str]:
-        """Return the entity ids of a setting, comma separated, without the ones misspelled."""
-        values = [value.strip() for value in self._setting(key, default).split(",")]
-        return [value for value in values if value and is_entity_id(value)]
+        """Return the entity ids of a setting, without the ones misspelled."""
+        return [value for value in self._values(key, default) if is_entity_id(value)]
 
     def _misspelled(self) -> list[str]:
         """Return the settings with a value that is no entity id, to say so in the log."""
-        found = []
-        for key in (CONF_PERSON, CONF_ZONES, CONF_SWITCH, CONF_TODO):
-            values = [value.strip() for value in self._setting(key).split(",")]
-            found += [f"{key}={value!r}" for value in values if value and not is_entity_id(value)]
-        return found
+        return [
+            f"{key}={value!r}"
+            for key in ENTITY_DOMAINS
+            for value in self._values(key)
+            if not is_entity_id(value)
+        ]
 
     @property
     def _person(self) -> str:
