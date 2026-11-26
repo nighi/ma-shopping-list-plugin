@@ -62,16 +62,11 @@ PAGE = """<!doctype html>
 <title>__TITLE__</title>
 <style>
   /* the colours of the Music Assistant app: dark by default, light where the system is light */
-  /* the theme the user chose in Music Assistant; "auto" follows the device like the app does */
+  /* the colours of the Music Assistant app; the script below turns "auto" into the device's */
   :root { color-scheme: dark; --bg: #181818; --panel: #232323; --fg: #ffffff;
           --muted: #ffffffb3; --line: #ffffff1f; --primary: #03a9f4; --tonal: #03a9f42e;
           --error: #cf6679; }
-  @media (prefers-color-scheme: light) {
-    :root[data-theme="auto"] { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff;
-      --fg: #000000; --muted: #00000099; --line: #0000001f; --tonal: #03a9f424;
-      --error: #b00020; }
-  }
-  :root[data-theme="light"] { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff;
+  :root[data-theme="light"], :root[data-device="light"] { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff;
     --fg: #000000; --muted: #00000099; --line: #0000001f; --tonal: #03a9f424;
     --error: #b00020; }
   * { box-sizing: border-box; }
@@ -140,6 +135,14 @@ PAGE = """<!doctype html>
   </section>
 </main>
 <script>
+// the theme the user chose in Music Assistant; "auto" follows the device like the app does
+const root = document.documentElement;
+if (root.dataset.theme === "auto") {
+  const light = matchMedia("(prefers-color-scheme: light)");
+  const follow = () => { root.dataset.device = light.matches ? "light" : "dark"; };
+  follow();
+  light.addEventListener("change", follow);
+}
 const T = __TEXTS__;
 const APP = __APP__;
 const PLAY = "M8,5.14V19.14L19,12.14L8,5.14Z";
@@ -161,29 +164,30 @@ function icon(path) {
 }
 
 async function call(path, body) {
+  const fromAction = Boolean(body);
   const options = body ? { method: "POST", headers: { "Content-Type": "application/json" },
                            body: JSON.stringify(body) } : {};
   try {
     const response = await fetch(base + path, options);
     if (!response.ok) throw new Error(response.status);
-    render(await response.json());
+    render(await response.json(), fromAction);
   } catch (err) {
-    show(T.error);
+    show(T.error, true);
   }
 }
 
 let shownAt = 0;
-function show(text) {
-  // a message stays for a few seconds, also when the next poll brings none
-  if (!text && Date.now() - shownAt < 6000) return;
+function show(text, now) {
+  // a message stays for a few seconds when a poll brings none; an action's answer replaces it
+  if (!text && !now && Date.now() - shownAt < 6000) return;
   if (text) shownAt = Date.now();
   $("message").textContent = text || "";
   $("message").classList.toggle("shown", Boolean(text));
 }
 
-function render(next) {
+function render(next, fromAction) {
   state = next;
-  show(state.message ? T[state.message] || T.action_failed : "");
+  show(state.message ? T[state.message] || T.action_failed : "", fromAction);
   $("status").querySelector(".status").classList.toggle("on", state.on);
   $("mode").textContent = state.on ? (state.zone ? fill(T.on_zone, state.zone) : T.on_manual) : T.off;
   $("meta").textContent = state.player ? fill(T.player, state.player) : T.no_player;
@@ -191,7 +195,8 @@ function render(next) {
   $("toggle-icon").setAttribute("d", state.on ? STOP : PLAY);
   label("read", T.read);
   label("skip", T.skip);
-  $("read").disabled = $("skip").disabled = !state.player || !state.items.length;
+  $("read").disabled = !state.player || !state.items.length;
+  $("skip").disabled = state.items.length < 2;
   $("list-title").textContent = fill(T.open, state.items.length);
   const list = $("items");
   list.replaceChildren();
@@ -232,6 +237,19 @@ setInterval(() => { if (!document.hidden) call("state"); }, 5000);
 </body>
 </html>
 """
+
+
+def page_language(user_language: str | None, plugin_language: str) -> str:
+    """
+    Return the language of the page: the user's in Music Assistant, else the plugin's, else English.
+
+    :param user_language: The language the user chose in Music Assistant, such as ``de_DE``.
+    :param plugin_language: The language of the announcements in the settings of the plugin.
+    """
+    for language in (str(user_language or "")[:2].lower(), plugin_language):
+        if language in TEXTS:
+            return language
+    return "en"
 
 
 def render_page(language: str, app_url: str = "", theme: str = "auto") -> str:

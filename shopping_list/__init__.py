@@ -43,7 +43,7 @@ from .home_assistant import (
     get_open_items,
     is_entity_id,
 )
-from .page import render_page
+from .page import page_language, render_page
 from .phrases import DEFAULT_LANGUAGE, PHRASES, Phrases, get_phrases
 from .shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -313,7 +313,9 @@ class ShoppingListProvider(PluginProvider):
                 await self._hass().subscribe_entities(self._on_entities, entities)
             )
         else:
-            self.logger.info("No zones or switch set: start shopping mode in the settings")
+            self.logger.info(
+                "No zones or switch set: start shopping mode on the page of the plugin"
+            )
         self._unsubscribers.append(
             self.mass.subscribe(
                 self._on_queue_event, (EventType.QUEUE_UPDATED, EventType.QUEUE_TIME_UPDATED)
@@ -346,16 +348,18 @@ class ShoppingListProvider(PluginProvider):
         if start and await self._list_is_empty():
             self.logger.info("Shopping mode not started: the list is empty")
             return False
+        if not start:
+            # ends it also in a zone, until the zone is left, as a finished list does
+            await self._finish_shopping("ended by hand")
+            return True
         if self._switch:
             # the switch is the one place that says whether shopping mode was started by hand;
             # its new state comes back through the subscription
             await self._hass().call_service(
-                "homeassistant",
-                "turn_on" if start else "turn_off",
-                target={"entity_id": self._switch},
+                "homeassistant", "turn_on", target={"entity_id": self._switch}
             )
         else:
-            self._mode.manual = start
+            self._mode.manual = True
             self._mode_changed()
         return True
 
@@ -380,7 +384,7 @@ class ShoppingListProvider(PluginProvider):
         if self._mode.on:
             if await self._list_is_empty():
                 # nothing to shop: the headphone buttons stay as they are
-                await self._finish_shopping()
+                await self._finish_shopping("the list is empty")
                 if self._player_plays():
                     await self._announce(phrases.not_started)
                 return
@@ -545,17 +549,16 @@ class ShoppingListProvider(PluginProvider):
     async def _respond(self, gesture: Gesture) -> str:
         """Do what a press asks for with the list and return what to say."""
         phrases = self._phrases
-        if gesture == Gesture.READ:
-            await self._refresh()
-            # a lone word is too short for some players to be heard at all
-            current = self._list.current
-            return phrases.read.format(current.summary) if current else await self._finish_empty()
-
+        fetched = True
+        if gesture == Gesture.READ or self._list.current is None:
+            fetched = await self._refresh()
         item = self._list.current
-        if item is None and await self._refresh():
-            item = self._list.current
         if item is None:
-            return await self._finish_empty()
+            # only a list known to be empty ends shopping mode, not one that could not be fetched
+            return await self._finish_empty() if fetched else phrases.empty
+        if gesture == Gesture.READ:
+            # a lone word is too short for some players to be heard at all
+            return phrases.read.format(item.summary)
 
         if gesture == Gesture.SKIP:
             if len(self._list) == 1:
@@ -583,11 +586,15 @@ class ShoppingListProvider(PluginProvider):
 
     async def _finish_empty(self) -> str:
         """End shopping mode on a press with nothing left on the list, and return what to say."""
-        await self._finish_shopping()
+        await self._finish_shopping("nothing is left on the list")
         return f"{self._phrases.empty} {self._phrases.deactivated}"
 
-    async def _finish_shopping(self) -> None:
-        """End shopping mode because the list is done; the caller says so."""
+    async def _finish_shopping(self, reason: str = "the list is done") -> None:
+        """
+        End shopping mode, until it is started again or the zone is left; the caller says so.
+
+        :param reason: Why, for the log.
+        """
         self._mode.finish()
         if self._switch:
             # the switch goes off as well, so it does not start shopping mode again; its state
@@ -600,7 +607,7 @@ class ShoppingListProvider(PluginProvider):
             except Exception as err:  # noqa: BLE001 - shopping mode is over all the same
                 self.logger.warning("Could not switch off %s: %s", self._switch, err)
         if self._mode.switched():
-            self.logger.info("Shopping mode off: the list is done")
+            self.logger.info("Shopping mode off: %s", reason)
 
     # the page
 
@@ -614,27 +621,34 @@ class ShoppingListProvider(PluginProvider):
         if path in {"", "/"}:
             # the language and theme the user chose in Music Assistant, else the plugin's
             preferences = user.preferences if (user := get_current_user()) else {}
-            language = str(preferences.get("language") or "")[:2].lower()
-            page = render_page(
-                language or self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE),
-                self.mass.webserver.base_url,
-                str(preferences.get("theme") or "auto"),
+            language = page_language(
+                preferences.get("language"), self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE)
             )
+            theme = str(preferences.get("theme") or "auto")
+            page = render_page(language, self.mass.webserver.base_url, theme)
             return web.Response(text=page, content_type="text/html")
-        message = None
         if path.strip("/") == "action" and request.method == "POST":
             try:
                 body = await request.json()
             except ValueError:
                 body = {}
+            if not isinstance(body, dict):
+                body = {}
             message = await self._page_action(str(body.get("action", "")), str(body.get("key", "")))
-        elif path.strip("/") != "state":
-            raise web.HTTPNotFound
-        return web.json_response({**await self._page_state(), "message": message})
+            # the action fetched the list already, where it needed it
+            return web.json_response({**await self._page_state(refresh=False), "message": message})
+        if path.strip("/") == "state":
+            return web.json_response({**await self._page_state(refresh=True), "message": None})
+        raise web.HTTPNotFound
 
-    async def _page_state(self) -> dict[str, Any]:
-        """Return what the page shows."""
-        await self._refresh()
+    async def _page_state(self, *, refresh: bool) -> dict[str, Any]:
+        """
+        Return what the page shows.
+
+        :param refresh: Fetch the list from Home Assistant first.
+        """
+        if refresh:
+            await self._refresh()
         player = self.mass.players.get_player(self._player_id) if self._player_id else None
         return {
             "on": self._mode.on,
@@ -657,13 +671,18 @@ class ShoppingListProvider(PluginProvider):
             return "start_failed" if action == "start" else "action_failed"
 
     async def _run_page_action(self, action: str, key: str) -> str | None:
-        """Do what a button of the page asks for; see ``_page_action``."""
-        if action in {"start", "stop"}:
-            if not self._player_id:
-                return "no_player"
-            started = await self._start_by_hand(start=action == "start")
-            return None if started else "not_started"
-        if not self._player_id or action not in {"read", "skip", "complete"}:
+        """
+        Do what a button of the page asks for, and return the key of a message to show, if any.
+
+        :param action: ``start``, ``stop``, ``read``, ``skip`` or ``complete``.
+        :param key: For ``complete``, the key of the entry to tick off.
+        """
+        if action == "start":
+            return None if await self._start_by_hand(start=True) else "not_started"
+        if action == "stop":
+            await self._start_by_hand(start=False)
+            return None
+        if action not in {"read", "skip", "complete"} or (action == "read" and not self._player_id):
             return None
         async with self._lock:
             await self._refresh()

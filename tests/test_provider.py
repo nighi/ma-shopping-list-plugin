@@ -4,7 +4,7 @@ from music_assistant_models.enums import FlowStepType, ProviderTier
 
 from music_assistant.mass import MusicAssistant
 from shopping_list import CONF_LANGUAGE, CONF_TODO, config_entries, zone_todo_key
-from shopping_list.page import render_page
+from shopping_list.page import page_language, render_page
 from tests import DOMAIN
 
 
@@ -45,3 +45,12 @@ def test_page_in_each_language_and_theme() -> None:
     assert '<html lang="en" data-theme="auto">' in english
     assert "Start shopping mode" in english
     assert "__" not in english.replace("__TEXTS__", "")
+
+
+def test_page_language() -> None:
+    """The page speaks the user's language if it can, else the plugin's, else English."""
+    assert page_language("de_DE", "en") == "de"
+    assert page_language("fr", "de") == "de"
+    assert page_language("auto", "de") == "de"
+    assert page_language(None, "en") == "en"
+    assert page_language("fr", "it") == "en"

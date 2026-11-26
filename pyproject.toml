@@ -1,6 +1,6 @@
 [project]
 name = "shopping-list"
-version = "0.0.0"
+version = "0.1.0"
 description = "Read out and tick off a Home Assistant shopping list with your headphone buttons, in Music Assistant"
 license = "Apache-2.0"
 requires-python = ">=3.14"
