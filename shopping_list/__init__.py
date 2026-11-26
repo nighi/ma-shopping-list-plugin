@@ -76,13 +76,15 @@ ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
 # the queue changes the plugin causes itself, by putting the queue back or resuming it, are no
 # button presses: changes within this many seconds after a press are not looked at
-OWN_CHANGES_SECONDS = 4.0
+OWN_CHANGES_SECONDS = 2.0
 # how long a press waits for the music to play again before the entry is read anyway
 RESUME_TIMEOUT = 8.0
 # how long the music plays again before the announcement starts
-SETTLE_SECONDS = 2.0
-# how long a pause made in the app settles before an announcement goes to the silent player
-AFTER_APP_PAUSE_SECONDS = 2.0
+SETTLE_SECONDS = 1.5
+# how long a pause made in the app settles before the plugin plays the music again
+AFTER_APP_PAUSE_SECONDS = 1.0
+# once the music plays again after a press, the plugin's own changes are over but for a moment
+AFTER_HANDLING_SECONDS = 1.0
 # the Home Assistant domains each entity setting offers to choose from
 ENTITY_DOMAINS: dict[str, set[str]] = {
     CONF_PERSON: {"person"},
@@ -416,8 +418,9 @@ class ShoppingListProvider(PluginProvider):
                 await self._handle_over_music(queue_id, detection)
             else:
                 await self._handle_in_silence(queue_id, detection)
-            # the queue changes that putting the music back causes arrive a little later
-            self._ignore_until = time.time() + OWN_CHANGES_SECONDS
+            # the music plays again: what changes after a moment more is the listener's doing
+            await self._wait_until_playing(queue_id)
+            self._ignore_until = time.time() + AFTER_HANDLING_SECONDS
 
     def _announces_natively(self) -> bool:
         """Return whether the player speaks an announcement over the music by itself."""
@@ -445,13 +448,11 @@ class ShoppingListProvider(PluginProvider):
         """
         try:
             if detection.gesture == Gesture.READ:
-                # the press already halted the music, in the app first: an app can still be
-                # settling its own pause and silence a stream that arrives meanwhile
-                await asyncio.sleep(AFTER_APP_PAUSE_SECONDS)
-            else:
-                # this also cancels the move to another track that a next or previous still
-                # has pending
-                await self.mass.player_queues.pause(queue_id)
+                await self._take_back_app_pause(queue_id)
+            # the plugin halts the music itself: an app that stays silent for an announcement
+            # after its own pause plays one after a pause from the server. This also cancels
+            # the move to another track that a next or previous still has pending
+            await self.mass.player_queues.pause(queue_id)
         except Exception as err:  # noqa: BLE001 - the entry is still said when this fails
             self.logger.warning("Could not halt the music: %s", err)
         await self._announce(await self._respond(detection.gesture))
@@ -459,6 +460,19 @@ class ShoppingListProvider(PluginProvider):
             await self._resume(queue_id, detection)
         except Exception as err:  # noqa: BLE001 - nothing else to do than to log it
             self.logger.warning("Could not put the music back: %s", err)
+
+    async def _take_back_app_pause(self, queue_id: str) -> None:
+        """
+        Play the music again for a moment after a pause the app made itself.
+
+        An app such as MassDroid silences its own output when its headphone button pauses, and
+        keeps an announcement that follows silent too; once the music plays again, it is back
+        in the state in which a pause from the server and an announcement work.
+        """
+        await asyncio.sleep(AFTER_APP_PAUSE_SECONDS)
+        await self.mass.players.cmd_play(self._player_id)
+        if await self._wait_until_playing(queue_id):
+            await asyncio.sleep(SETTLE_SECONDS)
 
     async def _resume(self, queue_id: str, detection: Detection) -> None:
         """Play the music again, at the track and position it was at before the press."""
