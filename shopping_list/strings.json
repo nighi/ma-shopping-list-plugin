@@ -18,15 +18,7 @@
     },
     "switch_entity": {
       "label": "Switch for shopping mode (optional)",
-      "description": "A Home Assistant switch, such as input_boolean.shopping_mode. While it is on, shopping mode is on wherever you are: switch it from a widget, by voice or from an automation. The buttons below then switch it too."
-    },
-    "start_shopping": {
-      "label": "Start shopping mode now",
-      "description": "Starts shopping mode outside of the zones. It stays on until you end it; without a switch it ends when the plugin restarts, also after saving the settings."
-    },
-    "stop_shopping": {
-      "label": "End shopping mode",
-      "description": "Ends a shopping mode that was started by hand. In a zone it stays on until you leave."
+      "description": "A Home Assistant switch, such as input_boolean.shopping_mode. While it is on, shopping mode is on wherever you are: switch it from a widget, by voice or from an automation. The page of the plugin switches it too."
     },
     "todo_entity": {
       "label": "Shopping list",
@@ -59,11 +51,6 @@
       "label": "Player stays silent after a pause on the headphones",
       "description": "Turn on for apps such as MassDroid, which keep an announcement silent after their own pause: reading then plays the music again for a moment first, which takes a few seconds longer."
     }
-  },
-  "config_actions": {
-    "started": "Shopping mode started.",
-    "stopped": "Shopping mode ended.",
-    "not_started": "The shopping list is empty: shopping mode not started."
   },
   "page": {
     "label": "Shopping list"

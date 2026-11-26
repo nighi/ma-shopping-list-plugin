@@ -18,15 +18,7 @@
     },
     "switch_entity": {
       "label": "Schalter für den Einkaufsmodus (optional)",
-      "description": "Ein Home-Assistant-Schalter, z. B. input_boolean.einkaufsmodus. Solange er an ist, ist der Einkaufsmodus aktiv, egal wo du bist: schaltbar per Widget, Sprachbefehl oder Automation. Die Knöpfe unten schalten ihn dann mit."
-    },
-    "start_shopping": {
-      "label": "Einkaufsmodus jetzt starten",
-      "description": "Startet den Einkaufsmodus auch außerhalb der Zonen. Er bleibt an, bis du ihn beendest; ohne Schalter endet er beim Neustart des Plugins, auch nach dem Speichern der Einstellungen."
-    },
-    "stop_shopping": {
-      "label": "Einkaufsmodus beenden",
-      "description": "Beendet einen von Hand gestarteten Einkaufsmodus. In einer Zone bleibt er an, bis du sie verlässt."
+      "description": "Ein Home-Assistant-Schalter, z. B. input_boolean.einkaufsmodus. Solange er an ist, ist der Einkaufsmodus aktiv, egal wo du bist: schaltbar per Widget, Sprachbefehl oder Automation. Die Seite des Plugins schaltet ihn mit."
     },
     "todo_entity": {
       "label": "Einkaufsliste",
@@ -59,11 +51,6 @@
       "label": "Player bleibt nach einer Pause an den Kopfhörern stumm",
       "description": "Für Apps wie MassDroid einschalten, die eine Ansage nach ihrer eigenen Pause stumm lassen: Beim Vorlesen läuft die Musik dann erst kurz weiter, was ein paar Sekunden länger dauert."
     }
-  },
-  "config_actions": {
-    "started": "Einkaufsmodus gestartet.",
-    "stopped": "Einkaufsmodus beendet.",
-    "not_started": "Die Einkaufsliste ist leer: Einkaufsmodus nicht gestartet."
   },
   "page": {
     "label": "Einkaufsliste"

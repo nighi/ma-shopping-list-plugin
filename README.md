@@ -50,7 +50,7 @@ Music Assistant itself, which is to be discussed with its maintainers.
 ## The page
 
 The plugin has a page of its own, in the main menu of the Music Assistant app under
-**Shopping list**, in the colours of the app: it shows the list and whether shopping mode is on, starts and ends shopping
+**Shopping list**, in the colours, theme and language you chose in the app: it shows the list and whether shopping mode is on, starts and ends shopping
 mode, reads the current entry, ticks entries off and moves the current one to the end.
 
 ## Several people and several shops
@@ -98,14 +98,14 @@ reading out a few seconds slower.
 
 Shopping mode can also be on outside of the zones, for example in a shop you have no zone for:
 
-- **Buttons in the settings:** *Start shopping mode now* and *End shopping mode*. Without a switch
+- **The page of the plugin:** *Start shopping mode* and *End shopping mode*. Without a switch
   (below), shopping mode started this way ends when the plugin restarts, also after saving its
   settings.
 - **A switch in Home Assistant** (optional): create a toggle helper, such as
   `input_boolean.shopping_mode` (*Settings → Devices & services → Helpers → Create helper →
   Toggle*), and enter it as *Switch for shopping mode*. While it is on, shopping mode is on. Switch
-  it from a dashboard, a phone widget, by voice or from an automation; the buttons in the
-  settings switch it too, and it survives restarts.
+  it from a dashboard, a phone widget, by voice or from an automation; the page
+  switches it too, and it survives restarts.
 
 Leaving a zone does not end shopping mode that was started by hand.
 

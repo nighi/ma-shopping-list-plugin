@@ -28,6 +28,9 @@ TEXTS: dict[str, dict[str, str]] = {
         "player": "Player: {0}",
         "no_player": "Kein Player gewählt: in den Einstellungen des Plugins auswählen.",
         "error": "Keine Verbindung zum Plugin.",
+        "not_started": "Die Einkaufsliste ist leer: Einkaufsmodus nicht gestartet.",
+        "start_failed": "Der Einkaufsmodus konnte nicht gestartet werden.",
+        "action_failed": "Das hat nicht geklappt.",
     },
     "en": {
         "title": "Shopping list",
@@ -45,23 +48,32 @@ TEXTS: dict[str, dict[str, str]] = {
         "player": "Player: {0}",
         "no_player": "No player chosen: choose one in the settings of the plugin.",
         "error": "No connection to the plugin.",
+        "not_started": "The shopping list is empty: shopping mode not started.",
+        "start_failed": "Shopping mode could not be started.",
+        "action_failed": "That did not work.",
     },
 }
 
 PAGE = """<!doctype html>
-<html lang="__LANG__">
+<html lang="__LANG__" data-theme="__THEME__">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>__TITLE__</title>
 <style>
   /* the colours of the Music Assistant app: dark by default, light where the system is light */
+  /* the theme the user chose in Music Assistant; "auto" follows the device like the app does */
   :root { color-scheme: dark; --bg: #181818; --panel: #232323; --fg: #ffffff;
-          --muted: #ffffffb3; --line: #ffffff1f; --primary: #03a9f4; --tonal: #03a9f42e; }
+          --muted: #ffffffb3; --line: #ffffff1f; --primary: #03a9f4; --tonal: #03a9f42e;
+          --error: #cf6679; }
   @media (prefers-color-scheme: light) {
-    :root { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff; --fg: #000000;
-            --muted: #00000099; --line: #0000001f; --tonal: #03a9f424; }
+    :root[data-theme="auto"] { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff;
+      --fg: #000000; --muted: #00000099; --line: #0000001f; --tonal: #03a9f424;
+      --error: #b00020; }
   }
+  :root[data-theme="light"] { color-scheme: light; --bg: #f5f5f5; --panel: #ffffff;
+    --fg: #000000; --muted: #00000099; --line: #0000001f; --tonal: #03a9f424;
+    --error: #b00020; }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--fg);
          font: 400 15px/1.45 Roboto, system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -97,7 +109,9 @@ PAGE = """<!doctype html>
   li.current .name { font-weight: 500; font-size: 17px; }
   li.empty { color: var(--muted); }
   li .icon-button { color: var(--primary); }
-  #message { color: var(--muted); text-align: center; }
+  #message { display: none; margin: 0 0 16px; padding: 12px 16px; border-radius: 8px;
+             background: var(--panel); color: var(--error); box-shadow: inset 3px 0 var(--error); }
+  #message.shown { display: block; }
 </style>
 </head>
 <body>
@@ -108,6 +122,7 @@ PAGE = """<!doctype html>
   <h1>__TITLE__</h1>
 </header>
 <main>
+  <p id="message" role="alert"></p>
   <section id="status" class="card">
     <div class="status">
       <svg class="cart" viewBox="0 0 24 24"><path d="M17,18A2,2 0 0,1 19,20A2,2 0 0,1 17,22C15.89,22 15,21.1 15,20C15,18.89 15.89,18 17,18M1,2H4.27L5.21,4H20A1,1 0 0,1 21,5C21,5.17 20.95,5.34 20.88,5.5L17.3,11.97C16.96,12.58 16.3,13 15.55,13H8.1L7.2,14.63L7.17,14.75A0.25,0.25 0 0,0 7.42,15H19V17H7C5.89,17 5,16.1 5,15C5,14.65 5.09,14.32 5.24,14.04L6.6,11.59L3,4H1V2M7,18A2,2 0 0,1 9,20A2,2 0 0,1 7,22C5.89,22 5,21.1 5,20C5,18.89 5.89,18 7,18Z"/></svg>
@@ -123,7 +138,6 @@ PAGE = """<!doctype html>
     <h2 id="list-title"></h2>
     <ul id="items"></ul>
   </section>
-  <p id="message"></p>
 </main>
 <script>
 const T = __TEXTS__;
@@ -154,13 +168,22 @@ async function call(path, body) {
     if (!response.ok) throw new Error(response.status);
     render(await response.json());
   } catch (err) {
-    $("message").textContent = T.error;
+    show(T.error);
   }
+}
+
+let shownAt = 0;
+function show(text) {
+  // a message stays for a few seconds, also when the next poll brings none
+  if (!text && Date.now() - shownAt < 6000) return;
+  if (text) shownAt = Date.now();
+  $("message").textContent = text || "";
+  $("message").classList.toggle("shown", Boolean(text));
 }
 
 function render(next) {
   state = next;
-  $("message").textContent = "";
+  show(state.message ? T[state.message] || T.action_failed : "");
   $("status").querySelector(".status").classList.toggle("on", state.on);
   $("mode").textContent = state.on ? (state.zone ? fill(T.on_zone, state.zone) : T.on_manual) : T.off;
   $("meta").textContent = state.player ? fill(T.player, state.player) : T.no_player;
@@ -211,12 +234,13 @@ setInterval(() => { if (!document.hidden) call("state"); }, 5000);
 """
 
 
-def render_page(language: str, app_url: str = "") -> str:
+def render_page(language: str, app_url: str = "", theme: str = "auto") -> str:
     """
     Return the HTML of the page in a language, English when the language is unknown.
 
     :param language: The language code from the settings, such as ``de``.
     :param app_url: The address of the Music Assistant app, where the back button leads.
+    :param theme: The theme the user chose in Music Assistant: ``auto``, ``light`` or ``dark``.
     """
     texts = TEXTS.get(language, TEXTS["en"])
 
@@ -227,6 +251,7 @@ def render_page(language: str, app_url: str = "") -> str:
     return (
         PAGE.replace("__LANG__", language if language in TEXTS else "en")
         .replace("__TITLE__", texts["title"])
+        .replace("__THEME__", theme if theme in {"light", "dark"} else "auto")
         .replace("__BACK__", texts["back"])
         .replace("__TEXTS__", script_json(texts))
         .replace("__APP__", script_json(app_url))

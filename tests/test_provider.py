@@ -36,10 +36,12 @@ def test_each_zone_gets_a_list_setting() -> None:
     assert zone_todo_key("zone.rewe") == "todo_for_zone_rewe"
 
 
-def test_page_in_each_language() -> None:
-    """The page comes in German or English, English for any other language."""
+def test_page_in_each_language_and_theme() -> None:
+    """The page comes in German or English, in the user's theme or following the device."""
     assert "Einkaufsmodus starten" in render_page("de")
+    assert 'data-theme="dark"' in render_page("de", theme="dark")
+    assert 'data-theme="auto"' in render_page("de", theme="purple")
     english = render_page("xx")
-    assert '<html lang="en">' in english
+    assert '<html lang="en" data-theme="auto">' in english
     assert "Start shopping mode" in english
     assert "__" not in english.replace("__TEXTS__", "")

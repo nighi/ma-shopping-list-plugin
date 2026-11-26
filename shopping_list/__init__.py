@@ -19,11 +19,7 @@ import time
 from typing import TYPE_CHECKING, cast
 
 from aiohttp import web
-from music_assistant_models.config_entries import (
-    ConfigActionResult,
-    ConfigEntry,
-    ConfigValueOption,
-)
+from music_assistant_models.config_entries import ConfigEntry, ConfigValueOption
 from music_assistant_models.enums import (
     ConfigEntryType,
     EventType,
@@ -32,6 +28,7 @@ from music_assistant_models.enums import (
 )
 from music_assistant_models.errors import SetupFailedError
 
+from music_assistant.controllers.webserver.helpers.auth_middleware import get_current_user
 from music_assistant.helpers.plugin_engines import (
     create_tts_engine_config_entries,
     resolve_tts_engine_setting,
@@ -76,8 +73,6 @@ CONF_CHIME = "chime"
 CONF_APP_PAUSE = "silent_after_app_pause"
 # the setting of the list of one zone: this prefix and the zone's entity id with _ for the dot
 ZONE_TODO_PREFIX = "todo_for_"
-ACTION_START = "start_shopping"
-ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
 # the queue changes the plugin causes itself, by putting the queue back or resuming it, are no
 # button presses: changes within this many seconds after a press are not looked at
@@ -163,12 +158,6 @@ def config_entries(
             type=ConfigEntryType.STRING,
             options=options.get(CONF_SWITCH, []),
             required=False,
-        ),
-        ConfigEntry(
-            key=ACTION_START, type=ConfigEntryType.ACTION, action=ACTION_START, required=False
-        ),
-        ConfigEntry(
-            key=ACTION_STOP, type=ConfigEntryType.ACTION, action=ACTION_STOP, required=False
         ),
         ConfigEntry(
             key=CONF_TODO,
@@ -347,21 +336,6 @@ class ShoppingListProvider(PluginProvider):
         return cast("HomeAssistantProvider", provider).hass
 
     # shopping mode
-
-    async def handle_config_action(
-        self, action: str
-    ) -> tuple[ConfigEntry, ...] | ConfigActionResult | None:
-        """Start or end shopping mode with the buttons in the settings."""
-        if action not in {ACTION_START, ACTION_STOP}:
-            return await super().handle_config_action(action)
-        start = action == ACTION_START
-        if not await self._start_by_hand(start=start):
-            return ConfigActionResult(
-                message="The shopping list is empty: shopping mode not started.",
-                translation_key="not_started",
-            )
-        key = "started" if start else "stopped"
-        return ConfigActionResult(message=f"Shopping mode {key}.", translation_key=key)
 
     async def _start_by_hand(self, *, start: bool) -> bool:
         """
@@ -638,18 +612,25 @@ class ShoppingListProvider(PluginProvider):
         :param path: The part of the address after the page's root.
         """
         if path in {"", "/"}:
-            language = self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE)
-            page = render_page(language, self.mass.webserver.base_url)
+            # the language and theme the user chose in Music Assistant, else the plugin's
+            preferences = user.preferences if (user := get_current_user()) else {}
+            language = str(preferences.get("language") or "")[:2].lower()
+            page = render_page(
+                language or self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE),
+                self.mass.webserver.base_url,
+                str(preferences.get("theme") or "auto"),
+            )
             return web.Response(text=page, content_type="text/html")
+        message = None
         if path.strip("/") == "action" and request.method == "POST":
             try:
                 body = await request.json()
             except ValueError:
                 body = {}
-            await self._page_action(str(body.get("action", "")), str(body.get("key", "")))
+            message = await self._page_action(str(body.get("action", "")), str(body.get("key", "")))
         elif path.strip("/") != "state":
             raise web.HTTPNotFound
-        return web.json_response(await self._page_state())
+        return web.json_response({**await self._page_state(), "message": message})
 
     async def _page_state(self) -> dict[str, Any]:
         """Return what the page shows."""
@@ -662,18 +643,28 @@ class ShoppingListProvider(PluginProvider):
             "items": [{"key": item.key, "summary": item.summary} for item in self._list.items],
         }
 
-    async def _page_action(self, action: str, key: str) -> None:
+    async def _page_action(self, action: str, key: str) -> str | None:
         """
-        Do what a button of the page asks for.
+        Do what a button of the page asks for, and return the key of a message to show, if any.
 
         :param action: ``start``, ``stop``, ``read``, ``skip`` or ``complete``.
-        :param key: For ``complete``, the key of the entry to tick off; the current one if empty.
+        :param key: For ``complete``, the key of the entry to tick off.
         """
+        try:
+            return await self._run_page_action(action, key)
+        except Exception as err:  # noqa: BLE001 - the page says it did not work
+            self.logger.warning("Page action %s failed: %s", action, err)
+            return "start_failed" if action == "start" else "action_failed"
+
+    async def _run_page_action(self, action: str, key: str) -> str | None:
+        """Do what a button of the page asks for; see ``_page_action``."""
         if action in {"start", "stop"}:
-            await self._start_by_hand(start=action == "start")
-            return
+            if not self._player_id:
+                return "no_player"
+            started = await self._start_by_hand(start=action == "start")
+            return None if started else "not_started"
         if not self._player_id or action not in {"read", "skip", "complete"}:
-            return
+            return None
         async with self._lock:
             await self._refresh()
             if action == "read":
@@ -696,6 +687,7 @@ class ShoppingListProvider(PluginProvider):
                     self._list.remove(item)
             # an announcement changes the queue for a while, which is no press either
             self._ignore_until = time.time() + AFTER_HANDLING_SECONDS
+        return None
 
     # Home Assistant and announcements
 
