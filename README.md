@@ -88,6 +88,9 @@ Shopping mode can also be on outside of the zones, for example in a shop you hav
 
 Leaving a zone does not end shopping mode that was started by hand.
 
+When the last entry is ticked off, shopping mode ends: one started by hand goes off (with its
+switch), and a zone starts it again only after you have left it.
+
 ## Development
 
 Based on the

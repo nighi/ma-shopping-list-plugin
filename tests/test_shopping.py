@@ -160,3 +160,22 @@ def test_entity_options() -> None:
         ("zone.no_name", "zone.no_name"),
     ]
     assert entity_options([], {"todo"}, []) == []
+
+
+def test_a_finished_list_ends_shopping_mode() -> None:
+    """A finished list ends shopping mode, also in a zone, until the zone is left."""
+    mode = ShoppingMode()
+    mode.manual = True
+    mode.finish()
+    assert not is_on(mode)
+    mode.zone = "Shop"
+    mode.finish()
+    assert not is_on(mode)
+    mode.zone = "Shop"
+    assert not is_on(mode)
+    mode.zone = None
+    mode.zone = "Market"
+    assert is_on(mode)
+    mode.finish()
+    mode.manual = True
+    assert is_on(mode)

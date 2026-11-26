@@ -528,7 +528,24 @@ class ShoppingListProvider(PluginProvider):
         self._list.remove(item)
         if following := self._list.current:
             return phrases.completed.format(item.summary, following.summary)
-        return phrases.completed_last.format(item.summary)
+        await self._finish_shopping()
+        return f"{phrases.completed_last.format(item.summary)} {phrases.deactivated}"
+
+    async def _finish_shopping(self) -> None:
+        """End shopping mode because the list is done; the caller says so."""
+        self._mode.finish()
+        if self._switch:
+            # the switch goes off as well, so it does not start shopping mode again; its state
+            # is set here already, so an update of the zones meanwhile does not read it as on
+            self._states.states[self._switch] = "off"
+            try:
+                await self._hass().call_service(
+                    "homeassistant", "turn_off", target={"entity_id": self._switch}
+                )
+            except Exception as err:  # noqa: BLE001 - shopping mode is over all the same
+                self.logger.warning("Could not switch off %s: %s", self._switch, err)
+        if self._mode.switched():
+            self.logger.info("Shopping mode off: the list is done")
 
     # Home Assistant and announcements
 
