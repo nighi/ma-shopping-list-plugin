@@ -62,7 +62,8 @@
   },
   "config_actions": {
     "started": "Einkaufsmodus gestartet.",
-    "stopped": "Einkaufsmodus beendet."
+    "stopped": "Einkaufsmodus beendet.",
+    "not_started": "Die Einkaufsliste ist leer: Einkaufsmodus nicht gestartet."
   },
   "page": {
     "label": "Einkaufsliste"

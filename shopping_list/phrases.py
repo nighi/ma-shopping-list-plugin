@@ -13,6 +13,7 @@ class Phrases:
     activated: str
     activated_manual: str
     deactivated: str
+    not_started: str
     read: str
     empty: str
     completed: str
@@ -28,6 +29,7 @@ PHRASES: dict[str, Phrases] = {
         activated="Einkaufsmodus bei {}. {} Artikel auf der Liste.",
         activated_manual="Einkaufsmodus aktiv. {} Artikel auf der Liste.",
         deactivated="Einkaufsmodus beendet.",
+        not_started="Die Einkaufsliste ist leer, der Einkaufsmodus bleibt aus.",
         read="Auf der Liste: {}.",
         empty="Die Einkaufsliste ist leer.",
         completed="{} erledigt. Nächster: {}.",
@@ -41,6 +43,7 @@ PHRASES: dict[str, Phrases] = {
         activated="Shopping mode at {}. {} items on the list.",
         activated_manual="Shopping mode on. {} items on the list.",
         deactivated="Shopping mode ended.",
+        not_started="The shopping list is empty, shopping mode stays off.",
         read="On the list: {}.",
         empty="The shopping list is empty.",
         completed="{} done. Next: {}.",

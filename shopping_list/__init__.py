@@ -355,12 +355,23 @@ class ShoppingListProvider(PluginProvider):
         if action not in {ACTION_START, ACTION_STOP}:
             return await super().handle_config_action(action)
         start = action == ACTION_START
-        await self._start_by_hand(start=start)
+        if not await self._start_by_hand(start=start):
+            return ConfigActionResult(
+                message="The shopping list is empty: shopping mode not started.",
+                translation_key="not_started",
+            )
         key = "started" if start else "stopped"
         return ConfigActionResult(message=f"Shopping mode {key}.", translation_key=key)
 
-    async def _start_by_hand(self, *, start: bool) -> None:
-        """Start or end shopping mode by hand: with the switch, if there is one."""
+    async def _start_by_hand(self, *, start: bool) -> bool:
+        """
+        Start or end shopping mode by hand: with the switch, if there is one.
+
+        Shopping mode does not start for an empty list; then this returns False.
+        """
+        if start and await self._list_is_empty():
+            self.logger.info("Shopping mode not started: the list is empty")
+            return False
         if self._switch:
             # the switch is the one place that says whether shopping mode was started by hand;
             # its new state comes back through the subscription
@@ -372,6 +383,7 @@ class ShoppingListProvider(PluginProvider):
         else:
             self._mode.manual = start
             self._mode_changed()
+        return True
 
     def _on_entities(self, message: dict[str, Any]) -> None:
         """Follow the person, the zones and the switch."""
@@ -392,7 +404,12 @@ class ShoppingListProvider(PluginProvider):
         """Say that shopping mode started or ended, when the player plays."""
         phrases = self._phrases
         if self._mode.on:
-            await self._refresh()
+            if await self._list_is_empty():
+                # nothing to shop: the headphone buttons stay as they are
+                await self._finish_shopping()
+                if self._player_plays():
+                    await self._announce(phrases.not_started)
+                return
             if self._mode.zone:
                 name = self._states.name_of(self._mode.zone)
                 text = phrases.activated.format(name, len(self._list))
@@ -558,11 +575,13 @@ class ShoppingListProvider(PluginProvider):
             await self._refresh()
             # a lone word is too short for some players to be heard at all
             current = self._list.current
-            return phrases.read.format(current.summary) if current else phrases.empty
+            return phrases.read.format(current.summary) if current else await self._finish_empty()
 
         item = self._list.current
+        if item is None and await self._refresh():
+            item = self._list.current
         if item is None:
-            return phrases.empty
+            return await self._finish_empty()
 
         if gesture == Gesture.SKIP:
             if len(self._list) == 1:
@@ -587,6 +606,11 @@ class ShoppingListProvider(PluginProvider):
             return phrases.completed.format(item.summary, following.summary)
         await self._finish_shopping()
         return f"{phrases.completed_last.format(item.summary)} {phrases.deactivated}"
+
+    async def _finish_empty(self) -> str:
+        """End shopping mode on a press with nothing left on the list, and return what to say."""
+        await self._finish_shopping()
+        return f"{self._phrases.empty} {self._phrases.deactivated}"
 
     async def _finish_shopping(self) -> None:
         """End shopping mode because the list is done; the caller says so."""
@@ -615,7 +639,8 @@ class ShoppingListProvider(PluginProvider):
         """
         if path in {"", "/"}:
             language = self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE)
-            return web.Response(text=render_page(language), content_type="text/html")
+            page = render_page(language, self.mass.webserver.base_url)
+            return web.Response(text=page, content_type="text/html")
         if path.strip("/") == "action" and request.method == "POST":
             try:
                 body = await request.json()
@@ -674,8 +699,8 @@ class ShoppingListProvider(PluginProvider):
 
     # Home Assistant and announcements
 
-    async def _refresh(self) -> None:
-        """Fetch the open entries of the list."""
+    async def _refresh(self) -> bool:
+        """Fetch the open entries of the list, and return whether that worked."""
         todo = self._todo
         if todo != self._list_entity:
             # another zone with another list: its entries are walked from the start
@@ -688,6 +713,12 @@ class ShoppingListProvider(PluginProvider):
                 self._todo,
                 err,
             )
+            return False
+        return True
+
+    async def _list_is_empty(self) -> bool:
+        """Return whether the list is known to be empty; not when it could not be fetched."""
+        return await self._refresh() and not self._list.items
 
     async def _announce(self, text: str) -> None:
         """Speak a text on the player, over the music."""

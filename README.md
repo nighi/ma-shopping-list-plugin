@@ -50,7 +50,7 @@ Music Assistant itself, which is to be discussed with its maintainers.
 ## The page
 
 The plugin has a page of its own, in the main menu of the Music Assistant app under
-**Shopping list**: it shows the list and whether shopping mode is on, starts and ends shopping
+**Shopping list**, in the colours of the app: it shows the list and whether shopping mode is on, starts and ends shopping
 mode, reads the current entry, ticks entries off and moves the current one to the end.
 
 ## Several people and several shops
@@ -109,6 +109,7 @@ Shopping mode can also be on outside of the zones, for example in a shop you hav
 
 Leaving a zone does not end shopping mode that was started by hand.
 
+Shopping mode does not start for an empty list, and a press when nothing is left ends it.
 When the last entry is ticked off, shopping mode ends: one started by hand goes off (with its
 switch), and a zone starts it again only after you have left it.
 

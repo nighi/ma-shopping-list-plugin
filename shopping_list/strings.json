@@ -62,7 +62,8 @@
   },
   "config_actions": {
     "started": "Shopping mode started.",
-    "stopped": "Shopping mode ended."
+    "stopped": "Shopping mode ended.",
+    "not_started": "The shopping list is empty: shopping mode not started."
   },
   "page": {
     "label": "Shopping list"

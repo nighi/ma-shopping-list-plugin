@@ -135,5 +135,5 @@ known-first-party = ["music_assistant"]
 
 [tool.codespell]
 skip = "uv.lock,LICENSE,*/translations/*"
-# hass: Home Assistant; ist: German in the spoken phrases
-ignore-words-list = "hass,ist"
+# hass: Home Assistant; ist, offen: German in the spoken phrases and the page
+ignore-words-list = "hass,ist,offen"
