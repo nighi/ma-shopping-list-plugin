@@ -47,6 +47,27 @@ while you are in the zone counts, also one from the app.
 A proper way for plugins to handle player buttons would remove the gap. That needs a change in
 Music Assistant itself, which is to be discussed with its maintainers.
 
+## The page
+
+The plugin has a page of its own, in the main menu of the Music Assistant app under
+**Shopping list**: it shows the list and whether shopping mode is on, starts and ends shopping
+mode, reads the current entry, ticks entries off and moves the current one to the end.
+
+## Several people and several shops
+
+- **One player per person:** add the plugin once per person, each with their own person and
+  player (their phone). Give each a name in its settings to tell them apart.
+- **A list per zone:** after choosing the zones and saving, each zone gets a setting
+  *Shopping list in …*, such as a drugstore list for the drugstore. Zones left empty use the
+  shopping list of the plugin, and so does shopping mode started by hand outside of the zones.
+
+## Players
+
+The official [Music Assistant app](https://github.com/music-assistant/mobile-app) works well.
+MassDroid keeps an announcement silent right after a pause on the headphones: turn on
+*Player stays silent after a pause on the headphones* (advanced settings) for it, which makes
+reading out a few seconds slower.
+
 ## Requirements
 
 - Music Assistant with the **Home Assistant plugin** set up.

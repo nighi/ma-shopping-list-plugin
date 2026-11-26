@@ -18,6 +18,7 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, cast
 
+from aiohttp import web
 from music_assistant_models.config_entries import (
     ConfigActionResult,
     ConfigEntry,
@@ -45,6 +46,7 @@ from .home_assistant import (
     get_open_items,
     is_entity_id,
 )
+from .page import render_page
 from .phrases import DEFAULT_LANGUAGE, PHRASES, Phrases, get_phrases
 from .shopping import ShoppingList, ShoppingMode, TodoItem
 
@@ -71,6 +73,9 @@ CONF_LANGUAGE = "language"
 CONF_SWITCH = "switch_entity"
 CONF_TTS = "tts_engine"
 CONF_CHIME = "chime"
+CONF_APP_PAUSE = "silent_after_app_pause"
+# the setting of the list of one zone: this prefix and the zone's entity id with _ for the dot
+ZONE_TODO_PREFIX = "todo_for_"
 ACTION_START = "start_shopping"
 ACTION_STOP = "stop_shopping"
 DEFAULT_TODO = "todo.shopping_list"
@@ -83,6 +88,8 @@ RESUME_TIMEOUT = 8.0
 SETTLE_SECONDS = 1.5
 # how long a pause made in the app settles before the plugin plays the music again
 AFTER_APP_PAUSE_SECONDS = 1.0
+# how long the app hears that the server took its pause, before the announcement starts
+PAUSE_CONFIRMED_SECONDS = 0.5
 # once the music plays again after a press, the plugin's own changes are over but for a moment
 AFTER_HANDLING_SECONDS = 1.0
 # the Home Assistant domains each entity setting offers to choose from
@@ -94,9 +101,19 @@ ENTITY_DOMAINS: dict[str, set[str]] = {
 }
 
 
+def zone_todo_key(zone: str) -> str:
+    """
+    Return the key of the setting that holds the list of a zone.
+
+    :param zone: The entity id of the zone, such as ``zone.supermarket``.
+    """
+    return ZONE_TODO_PREFIX + zone.replace(".", "_")
+
+
 def config_entries(
     players: list[ConfigValueOption],
     entities: dict[str, list[ConfigValueOption]] | None = None,
+    zones: list[tuple[str, str]] | None = None,
 ) -> tuple[ConfigEntry, ...]:
     """
     Return the settings of the plugin.
@@ -106,10 +123,25 @@ def config_entries(
     zones are only needed to start shopping mode by location, the switch only to start it from
     Home Assistant. Without the entities of Home Assistant to choose from, entity ids are typed.
 
+    Each chosen zone gets a setting of its own for the list used there; left empty, the zone uses
+    the shopping list of the plugin.
+
     :param players: The players to choose from.
     :param entities: Per entity setting, the entities of Home Assistant to choose from.
+    :param zones: The chosen zones, as entity id and name.
     """
     options = entities or {}
+    zone_lists = [
+        ConfigEntry(
+            key=zone_todo_key(zone),
+            type=ConfigEntryType.STRING,
+            options=options.get(CONF_TODO, []),
+            required=False,
+            translation_key="zone_todo",
+            translation_params=[name],
+        )
+        for zone, name in zones or []
+    ]
     return (
         ConfigEntry(key=CONF_PLAYER, type=ConfigEntryType.STRING, options=players, required=False),
         ConfigEntry(
@@ -144,6 +176,7 @@ def config_entries(
             default_value=DEFAULT_TODO,
             options=options.get(CONF_TODO, []),
         ),
+        *zone_lists,
         ConfigEntry(
             key=CONF_REMOVE, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
         ),
@@ -155,6 +188,13 @@ def config_entries(
         ),
         ConfigEntry(
             key=CONF_CHIME, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
+        ),
+        ConfigEntry(
+            key=CONF_APP_PAUSE,
+            type=ConfigEntryType.BOOLEAN,
+            default_value=False,
+            required=False,
+            advanced=True,
         ),
     )
 
@@ -176,6 +216,7 @@ class ShoppingListProvider(PluginProvider):
         """Initialize the plugin; it starts working in ``loaded_in_mass``."""
         super().__init__(*args, **kwargs)
         self._list = ShoppingList()
+        self._list_entity = ""
         self._states = EntityStates()
         self._mode = ShoppingMode()
         self._snapshot: QueueSnapshot | None = None
@@ -196,8 +237,13 @@ class ShoppingListProvider(PluginProvider):
             key: entity_options(states, domains, self._values(key))
             for key, domains in ENTITY_DOMAINS.items()
         }
+        names = EntityStates()
+        names.apply(
+            {"a": {state["entity_id"]: {"a": state.get("attributes", {})} for state in states}}
+        )
+        zones = [(zone, names.name_of(zone)) for zone in self._zones]
         tts = await create_tts_engine_config_entries(self.mass, CONF_TTS, category="generic")
-        return (*config_entries(players, entities), *tts)
+        return (*config_entries(players, entities, zones), *tts)
 
     async def _all_states(self) -> list[dict[str, Any]]:
         """Return the states of all Home Assistant entities, or none when it is not reachable."""
@@ -232,7 +278,7 @@ class ShoppingListProvider(PluginProvider):
         """Return the settings with a value that is no entity id, to say so in the log."""
         return [
             f"{key}={value!r}"
-            for key in ENTITY_DOMAINS
+            for key in (*ENTITY_DOMAINS, *(zone_todo_key(zone) for zone in self._zones))
             for value in self._values(key)
             if not is_entity_id(value)
         ]
@@ -251,6 +297,9 @@ class ShoppingListProvider(PluginProvider):
 
     @property
     def _todo(self) -> str:
+        """Return the list in use: the one of the zone the person is in, else the plugin's."""
+        if (zone := self._mode.zone) and (lists := self._entities(zone_todo_key(zone))):
+            return lists[0]
         return next(iter(self._entities(CONF_TODO, DEFAULT_TODO)), DEFAULT_TODO)
 
     @property
@@ -306,6 +355,12 @@ class ShoppingListProvider(PluginProvider):
         if action not in {ACTION_START, ACTION_STOP}:
             return await super().handle_config_action(action)
         start = action == ACTION_START
+        await self._start_by_hand(start=start)
+        key = "started" if start else "stopped"
+        return ConfigActionResult(message=f"Shopping mode {key}.", translation_key=key)
+
+    async def _start_by_hand(self, *, start: bool) -> None:
+        """Start or end shopping mode by hand: with the switch, if there is one."""
         if self._switch:
             # the switch is the one place that says whether shopping mode was started by hand;
             # its new state comes back through the subscription
@@ -317,8 +372,6 @@ class ShoppingListProvider(PluginProvider):
         else:
             self._mode.manual = start
             self._mode_changed()
-        key = "started" if start else "stopped"
-        return ConfigActionResult(message=f"Shopping mode {key}.", translation_key=key)
 
     def _on_entities(self, message: dict[str, Any]) -> None:
         """Follow the person, the zones and the switch."""
@@ -341,7 +394,8 @@ class ShoppingListProvider(PluginProvider):
         if self._mode.on:
             await self._refresh()
             if self._mode.zone:
-                text = phrases.activated.format(self._mode.zone, len(self._list))
+                name = self._states.name_of(self._mode.zone)
+                text = phrases.activated.format(name, len(self._list))
             else:
                 text = phrases.activated_manual.format(len(self._list))
         else:
@@ -448,7 +502,10 @@ class ShoppingListProvider(PluginProvider):
         """
         try:
             if detection.gesture == Gesture.READ:
-                await self._take_back_app_pause(queue_id)
+                if self.config.get_value(CONF_APP_PAUSE):
+                    await self._take_back_app_pause(queue_id)
+                else:
+                    await asyncio.sleep(PAUSE_CONFIRMED_SECONDS)
             # the plugin halts the music itself: an app that stays silent for an announcement
             # after its own pause plays one after a pause from the server. This also cancels
             # the move to another track that a next or previous still has pending
@@ -547,12 +604,84 @@ class ShoppingListProvider(PluginProvider):
         if self._mode.switched():
             self.logger.info("Shopping mode off: the list is done")
 
+    # the page
+
+    async def handle_page_request(self, request: web.Request, path: str) -> web.StreamResponse:
+        """
+        Serve the page of the plugin: the page itself, its ``state`` and its ``action`` calls.
+
+        :param request: The request.
+        :param path: The part of the address after the page's root.
+        """
+        if path in {"", "/"}:
+            language = self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE)
+            return web.Response(text=render_page(language), content_type="text/html")
+        if path.strip("/") == "action" and request.method == "POST":
+            try:
+                body = await request.json()
+            except ValueError:
+                body = {}
+            await self._page_action(str(body.get("action", "")), str(body.get("key", "")))
+        elif path.strip("/") != "state":
+            raise web.HTTPNotFound
+        return web.json_response(await self._page_state())
+
+    async def _page_state(self) -> dict[str, Any]:
+        """Return what the page shows."""
+        await self._refresh()
+        player = self.mass.players.get_player(self._player_id) if self._player_id else None
+        return {
+            "on": self._mode.on,
+            "zone": self._states.name_of(self._mode.zone) if self._mode.zone else None,
+            "player": player.name if player else None,
+            "items": [{"key": item.key, "summary": item.summary} for item in self._list.items],
+        }
+
+    async def _page_action(self, action: str, key: str) -> None:
+        """
+        Do what a button of the page asks for.
+
+        :param action: ``start``, ``stop``, ``read``, ``skip`` or ``complete``.
+        :param key: For ``complete``, the key of the entry to tick off; the current one if empty.
+        """
+        if action in {"start", "stop"}:
+            await self._start_by_hand(start=action == "start")
+            return
+        if not self._player_id or action not in {"read", "skip", "complete"}:
+            return
+        async with self._lock:
+            await self._refresh()
+            if action == "read":
+                current = self._list.current
+                text = self._phrases.read.format(current.summary) if current else None
+                await self._announce(text or self._phrases.empty)
+            elif action == "skip":
+                self._list.skip()
+            elif item := next((entry for entry in self._list.items if entry.key == key), None):
+                # ticked off on the screen, where the result shows: nothing to say
+                if item == self._list.current:
+                    await self._complete(item)
+                else:
+                    await finish_item(
+                        self._hass(),
+                        self._todo,
+                        item,
+                        remove=bool(self.config.get_value(CONF_REMOVE)),
+                    )
+                    self._list.remove(item)
+            # an announcement changes the queue for a while, which is no press either
+            self._ignore_until = time.time() + AFTER_HANDLING_SECONDS
+
     # Home Assistant and announcements
 
     async def _refresh(self) -> None:
         """Fetch the open entries of the list."""
+        todo = self._todo
+        if todo != self._list_entity:
+            # another zone with another list: its entries are walked from the start
+            self._list, self._list_entity = ShoppingList(), todo
         try:
-            self._list.update(await get_open_items(self._hass(), self._todo))
+            self._list.update(await get_open_items(self._hass(), todo))
         except Exception as err:  # noqa: BLE001 - the last known list is used instead
             self.logger.warning(
                 "Could not fetch %s, is it the entity id of a to-do list in Home Assistant? %s",

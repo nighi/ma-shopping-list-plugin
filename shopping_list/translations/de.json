@@ -1,7 +1,7 @@
 {
   "manifest": {
     "name": "Einkaufsliste",
-    "description": "Liest deine Home-Assistant-Einkaufsliste über die Tasten deiner Kopfhörer vor und hakt sie ab, solange du in einer Supermarkt-Zone bist, ohne die Musik anzuhalten."
+    "description": "Liest deine Home-Assistant-Einkaufsliste über die Tasten deiner Kopfhörer vor und hakt sie ab, solange du in einer Supermarkt-Zone bist. Einmal pro Person hinzufügen, mit ihrem eigenen Player."
   },
   "config_entries": {
     "player_id": {
@@ -32,6 +32,10 @@
       "label": "Einkaufsliste",
       "description": "Die Home-Assistant-To-do-Liste, die vorgelesen wird, z. B. todo.shopping_list."
     },
+    "zone_todo": {
+      "label": "Einkaufsliste bei {0}",
+      "description": "Die To-do-Liste, die in dieser Zone vorgelesen wird. Leer lassen für die Einkaufsliste oben."
+    },
     "remove_items": {
       "label": "Einträge löschen statt abhaken",
       "description": "Zweimal drücken löscht den Eintrag aus der Liste, statt ihn als erledigt zu markieren."
@@ -50,10 +54,17 @@
     "chime": {
       "label": "Gong vor den Ansagen",
       "description": "Vor jedem vorgelesenen Eintrag einen kurzen Gong abspielen."
+    },
+    "silent_after_app_pause": {
+      "label": "Player bleibt nach einer Pause an den Kopfhörern stumm",
+      "description": "Für Apps wie MassDroid einschalten, die eine Ansage nach ihrer eigenen Pause stumm lassen: Beim Vorlesen läuft die Musik dann erst kurz weiter, was ein paar Sekunden länger dauert."
     }
   },
   "config_actions": {
     "started": "Einkaufsmodus gestartet.",
     "stopped": "Einkaufsmodus beendet."
+  },
+  "page": {
+    "label": "Einkaufsliste"
   }
 }

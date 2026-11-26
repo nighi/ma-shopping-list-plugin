@@ -1,7 +1,7 @@
 {
   "manifest": {
     "name": "Shopping list",
-    "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone, without stopping the music."
+    "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone. Add it once per person, with their own player."
   },
   "config_entries": {
     "player_id": {
@@ -32,6 +32,10 @@
       "label": "Shopping list",
       "description": "The Home Assistant to-do list to read, such as todo.shopping_list."
     },
+    "zone_todo": {
+      "label": "Shopping list in {0}",
+      "description": "The to-do list read in this zone. Leave it empty for the shopping list above."
+    },
     "remove_items": {
       "label": "Delete entries instead of ticking them off",
       "description": "Two presses delete the entry from the list instead of marking it as completed."
@@ -50,10 +54,17 @@
     "chime": {
       "label": "Chime before announcements",
       "description": "Play a short chime before each entry is read."
+    },
+    "silent_after_app_pause": {
+      "label": "Player stays silent after a pause on the headphones",
+      "description": "Turn on for apps such as MassDroid, which keep an announcement silent after their own pause: reading then plays the music again for a moment first, which takes a few seconds longer."
     }
   },
   "config_actions": {
     "started": "Shopping mode started.",
     "stopped": "Shopping mode ended."
+  },
+  "page": {
+    "label": "Shopping list"
   }
 }

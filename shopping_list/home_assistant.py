@@ -93,9 +93,17 @@ class EntityStates:
             self.states.pop(entity_id, None)
             self.attributes.pop(entity_id, None)
 
+    def name_of(self, entity_id: str) -> str:
+        """
+        Return the name of an entity, or its entity id when it has none.
+
+        :param entity_id: The entity id, such as ``zone.supermarket``.
+        """
+        return str(self.attributes.get(entity_id, {}).get("friendly_name") or entity_id)
+
     def zone_of(self, person: str, zones: list[str]) -> str | None:
         """
-        Return the name of the first of the zones the person is in, or None.
+        Return the entity id of the first of the zones the person is in, or None.
 
         A zone lists the persons in it in its ``persons`` attribute; the state of a person is the
         name of the zone it is in, which is the fallback for zones that list nobody.
@@ -106,9 +114,8 @@ class EntityStates:
         person_state = self.states.get(person)
         for zone in zones:
             attributes = self.attributes.get(zone, {})
-            name = str(attributes.get("friendly_name") or zone)
-            if person in (attributes.get("persons") or []) or person_state == name:
-                return name
+            if person in (attributes.get("persons") or []) or person_state == self.name_of(zone):
+                return zone
         return None
 
 

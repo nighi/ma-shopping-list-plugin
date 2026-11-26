@@ -3,7 +3,8 @@
 from music_assistant_models.enums import FlowStepType, ProviderTier
 
 from music_assistant.mass import MusicAssistant
-from shopping_list import CONF_LANGUAGE, CONF_TODO, config_entries
+from shopping_list import CONF_LANGUAGE, CONF_TODO, config_entries, zone_todo_key
+from shopping_list.page import render_page
 from tests import DOMAIN
 
 
@@ -23,3 +24,22 @@ def test_can_be_added_before_the_phone_is_known() -> None:
     """Only the settings with a default are required, so the plugin can be added at once."""
     required = {entry.key for entry in config_entries([]) if entry.required}
     assert required <= {CONF_TODO, CONF_LANGUAGE}
+
+
+def test_each_zone_gets_a_list_setting() -> None:
+    """Every chosen zone gets an optional setting for its own list, labelled with its name."""
+    entries = config_entries([], zones=[("zone.rewe", "Rewe"), ("zone.dm", "dm")])
+    by_key = {entry.key: entry for entry in entries}
+    assert by_key[zone_todo_key("zone.rewe")].translation_params == ["Rewe"]
+    assert by_key[zone_todo_key("zone.dm")].translation_key == "zone_todo"
+    assert not by_key[zone_todo_key("zone.dm")].required
+    assert zone_todo_key("zone.rewe") == "todo_for_zone_rewe"
+
+
+def test_page_in_each_language() -> None:
+    """The page comes in German or English, English for any other language."""
+    assert "Einkaufsmodus starten" in render_page("de")
+    english = render_page("xx")
+    assert '<html lang="en">' in english
+    assert "Start shopping mode" in english
+    assert "__" not in english.replace("__TEXTS__", "")

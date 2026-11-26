@@ -3,11 +3,20 @@
   "domain": "shopping_list",
   "stage": "alpha",
   "name": "Shopping list",
-  "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone, without stopping the music.",
-  "codeowners": ["@nighi"],
-  "provides": ["assistant"],
+  "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone. Add it once per person, with their own player.",
+  "codeowners": [
+    "@nighi"
+  ],
+  "provides": [
+    "assistant"
+  ],
   "requirements": [],
   "depends_on": "hass",
   "documentation": "https://github.com/nighi/ma-shopping-list-plugin#readme",
-  "multi_instance": false
+  "multi_instance": true,
+  "page": {
+    "label": "Shopping list",
+    "scope": "players.control",
+    "icon": "mdi-cart-outline"
+  }
 }

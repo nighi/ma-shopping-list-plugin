@@ -57,10 +57,11 @@ def test_zone_from_persons_and_from_person_state() -> None:
     zones = ["zone.shop", "zone.market"]
     assert states.zone_of("person.alex", zones) is None
     states.apply({"c": {"zone.shop": {"+": {"s": "1", "a": {"persons": ["person.alex"]}}}}})
-    assert states.zone_of("person.alex", zones) == "Shop"
+    assert states.zone_of("person.alex", zones) == "zone.shop"
+    assert states.name_of("zone.shop") == "Shop"
     states.apply({"c": {"zone.shop": {"-": {"a": ["persons"]}}}})
     states.apply({"c": {"person.alex": {"+": {"s": "Market"}}}})
-    assert states.zone_of("person.alex", zones) == "Market"
+    assert states.zone_of("person.alex", zones) == "zone.market"
     states.apply({"r": ["zone.market"]})
     assert states.zone_of("person.alex", zones) is None
 
