@@ -3,7 +3,7 @@
   "domain": "shopping_list",
   "stage": "alpha",
   "name": "Shopping list",
-  "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone. Add it once per person, with their own player.",
+  "description": "Reads out and ticks off your Home Assistant shopping list with the media controls of your player, such as those of your headphones, while you are in a supermarket zone. Add it once per person, with their own player.",
   "codeowners": [
     "@nighi"
   ],

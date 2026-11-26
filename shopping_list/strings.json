@@ -1,12 +1,12 @@
 {
   "manifest": {
     "name": "Shopping list",
-    "description": "Reads out and ticks off your Home Assistant shopping list with the buttons of your headphones while you are in a supermarket zone. Add it once per person, with their own player."
+    "description": "Reads out and ticks off your Home Assistant shopping list with the media controls of your player, such as those of your headphones, while you are in a supermarket zone. Add it once per person, with their own player."
   },
   "config_entries": {
     "player_id": {
       "label": "Player",
-      "description": "The player your headphones are connected to, usually your phone in the Music Assistant app."
+      "description": "The player whose media controls you use while shopping, usually your phone in the Music Assistant app."
     },
     "person_entity": {
       "label": "Person",
@@ -30,7 +30,7 @@
     },
     "remove_items": {
       "label": "Delete entries instead of ticking them off",
-      "description": "Two presses delete the entry from the list instead of marking it as completed."
+      "description": "Ticking off deletes the entry from the list instead of marking it as completed."
     },
     "language": {
       "label": "Language of the announcements",
@@ -47,9 +47,17 @@
       "label": "Chime before announcements",
       "description": "Play a short chime before each entry is read."
     },
-    "silent_after_app_pause": {
-      "label": "Player stays silent after a pause on the headphones",
-      "description": "Turn on for apps such as MassDroid, which keep an announcement silent after their own pause: reading then plays the music again for a moment first, which takes a few seconds longer."
+    "read_on_play_pause": {
+      "label": "Play/pause reads out the current entry",
+      "description": "Off: play/pause keeps pausing the music in shopping mode."
+    },
+    "complete_on_next": {
+      "label": "Next ticks off the current entry",
+      "description": "Off: next keeps skipping to the next track in shopping mode."
+    },
+    "skip_on_previous": {
+      "label": "Previous moves the current entry to the end",
+      "description": "Off: previous keeps going back a track in shopping mode."
     }
   },
   "page": {

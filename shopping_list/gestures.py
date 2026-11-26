@@ -1,15 +1,14 @@
 """
-Recognise headphone button presses from the changes of a player queue.
+Recognise the media controls of a player from the changes of its queue.
 
-Music Assistant has no way for a plugin to take over the transport commands of a player, so the
-plugin watches what the commands did to the queue instead:
+Music Assistant has no way for a plugin to take over the media controls of a player, so the
+plugin watches what a control did to the queue instead:
 
-- one press (play/pause) pauses the queue at the same item: read the current entry; a player
-  that cannot pause is stopped instead, which counts the same when the item was not about to end;
-- two presses (next) move the queue to its next item before the item ended: tick the entry off;
-  a queue without a next item does not move at all, so then the press cannot be seen;
-- three presses (previous) move the queue one item back, or restart the current item: skip the
-  entry.
+- play/pause pauses the queue at the same item: read the current entry; a player that cannot
+  pause is stopped instead, which counts the same when the item was not about to end;
+- next moves the queue to its next item before the item ended: tick the entry off; a queue
+  without a next item does not move at all, so then it cannot be seen;
+- previous moves the queue one item back, or restarts the current item: skip the entry.
 
 For next and previous the queue is put back where it was, so the music goes on.
 """

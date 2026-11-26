@@ -1,12 +1,12 @@
 {
   "manifest": {
     "name": "Einkaufsliste",
-    "description": "Liest deine Home-Assistant-Einkaufsliste über die Tasten deiner Kopfhörer vor und hakt sie ab, solange du in einer Supermarkt-Zone bist. Einmal pro Person hinzufügen, mit ihrem eigenen Player."
+    "description": "Liest deine Home-Assistant-Einkaufsliste über die Mediensteuerung deines Players vor, etwa die deiner Kopfhörer, und hakt sie ab, solange du in einer Supermarkt-Zone bist. Einmal pro Person hinzufügen, mit eigenem Player."
   },
   "config_entries": {
     "player_id": {
       "label": "Player",
-      "description": "Der Player, mit dem deine Kopfhörer verbunden sind, meist dein Handy in der Music-Assistant-App."
+      "description": "Der Player, dessen Mediensteuerung du beim Einkaufen nutzt, meist dein Handy in der Music-Assistant-App."
     },
     "person_entity": {
       "label": "Person",
@@ -30,7 +30,7 @@
     },
     "remove_items": {
       "label": "Einträge löschen statt abhaken",
-      "description": "Zweimal drücken löscht den Eintrag aus der Liste, statt ihn als erledigt zu markieren."
+      "description": "Abhaken löscht den Eintrag aus der Liste, statt ihn als erledigt zu markieren."
     },
     "language": {
       "label": "Sprache der Ansagen",
@@ -47,9 +47,17 @@
       "label": "Gong vor den Ansagen",
       "description": "Vor jedem vorgelesenen Eintrag einen kurzen Gong abspielen."
     },
-    "silent_after_app_pause": {
-      "label": "Player bleibt nach einer Pause an den Kopfhörern stumm",
-      "description": "Für Apps wie MassDroid einschalten, die eine Ansage nach ihrer eigenen Pause stumm lassen: Beim Vorlesen läuft die Musik dann erst kurz weiter, was ein paar Sekunden länger dauert."
+    "read_on_play_pause": {
+      "label": "Play/Pause liest den aktuellen Eintrag vor",
+      "description": "Aus: Play/Pause pausiert im Einkaufsmodus weiterhin die Musik."
+    },
+    "complete_on_next": {
+      "label": "Weiter hakt den aktuellen Eintrag ab",
+      "description": "Aus: Weiter springt im Einkaufsmodus weiterhin zum nächsten Titel."
+    },
+    "skip_on_previous": {
+      "label": "Zurück schiebt den aktuellen Eintrag ans Ende",
+      "description": "Aus: Zurück springt im Einkaufsmodus weiterhin einen Titel zurück."
     }
   },
   "page": {

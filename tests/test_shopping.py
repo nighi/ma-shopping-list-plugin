@@ -107,10 +107,10 @@ async def test_finish_item_ticks_off_or_deletes() -> None:
     ]
 
 
-def test_unknown_language_falls_back_to_german() -> None:
-    """An unknown language speaks German."""
-    assert get_phrases("xx").tts_language == "de-DE"
-    assert get_phrases("en").tts_language == "en-US"
+def test_unknown_language_falls_back_to_english() -> None:
+    """An unknown language speaks English."""
+    assert get_phrases("xx").tts_language == "en-US"
+    assert get_phrases("de").tts_language == "de-DE"
 
 
 def is_on(mode: ShoppingMode) -> bool:

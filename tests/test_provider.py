@@ -3,7 +3,15 @@
 from music_assistant_models.enums import FlowStepType, ProviderTier
 
 from music_assistant.mass import MusicAssistant
-from shopping_list import CONF_LANGUAGE, CONF_TODO, config_entries, zone_todo_key
+from shopping_list import (
+    CONF_COMPLETE,
+    CONF_LANGUAGE,
+    CONF_READ,
+    CONF_SKIP,
+    CONF_TODO,
+    config_entries,
+    zone_todo_key,
+)
 from shopping_list.page import page_language, render_page
 from tests import DOMAIN
 
@@ -48,9 +56,15 @@ def test_page_in_each_language_and_theme() -> None:
 
 
 def test_page_language() -> None:
-    """The page speaks the user's language if it can, else the plugin's, else English."""
-    assert page_language("de_DE", "en") == "de"
-    assert page_language("fr", "de") == "de"
-    assert page_language("auto", "de") == "de"
-    assert page_language(None, "en") == "en"
-    assert page_language("fr", "it") == "en"
+    """The page speaks the user's language if it can, else English."""
+    assert page_language("de_DE") == "de"
+    assert page_language("fr") == "en"
+    assert page_language("auto") == "en"
+    assert page_language(None) == "en"
+
+
+def test_each_control_can_be_left_alone() -> None:
+    """Each of the three controls has a setting, on by default, to take it over or not."""
+    by_key = {entry.key: entry for entry in config_entries([])}
+    for key in (CONF_READ, CONF_COMPLETE, CONF_SKIP):
+        assert by_key[key].default_value is True

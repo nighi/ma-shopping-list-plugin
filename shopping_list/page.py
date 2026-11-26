@@ -239,17 +239,14 @@ setInterval(() => { if (!document.hidden) call("state"); }, 5000);
 """
 
 
-def page_language(user_language: str | None, plugin_language: str) -> str:
+def page_language(user_language: str | None) -> str:
     """
-    Return the language of the page: the user's in Music Assistant, else the plugin's, else English.
+    Return the language of the page: the user's in Music Assistant if the page has it, else English.
 
     :param user_language: The language the user chose in Music Assistant, such as ``de_DE``.
-    :param plugin_language: The language of the announcements in the settings of the plugin.
     """
-    for language in (str(user_language or "")[:2].lower(), plugin_language):
-        if language in TEXTS:
-            return language
-    return "en"
+    language = str(user_language or "")[:2].lower()
+    return language if language in TEXTS else "en"
 
 
 def render_page(language: str, app_url: str = "", theme: str = "auto") -> str:

@@ -25,6 +25,7 @@ from music_assistant_models.enums import (
     EventType,
     PlaybackState,
     PlayerFeature,
+    RepeatMode,
 )
 from music_assistant_models.errors import SetupFailedError
 
@@ -70,7 +71,9 @@ CONF_LANGUAGE = "language"
 CONF_SWITCH = "switch_entity"
 CONF_TTS = "tts_engine"
 CONF_CHIME = "chime"
-CONF_APP_PAUSE = "silent_after_app_pause"
+CONF_READ = "read_on_play_pause"
+CONF_COMPLETE = "complete_on_next"
+CONF_SKIP = "skip_on_previous"
 # the setting of the list of one zone: this prefix and the zone's entity id with _ for the dot
 ZONE_TODO_PREFIX = "todo_for_"
 DEFAULT_TODO = "todo.shopping_list"
@@ -81,8 +84,6 @@ OWN_CHANGES_SECONDS = 2.0
 RESUME_TIMEOUT = 8.0
 # how long the music plays again before the announcement starts
 SETTLE_SECONDS = 1.5
-# how long a pause made in the app settles before the plugin plays the music again
-AFTER_APP_PAUSE_SECONDS = 1.0
 # how long the app hears that the server took its pause, before the announcement starts
 PAUSE_CONFIRMED_SECONDS = 0.5
 # once the music plays again after a press, the plugin's own changes are over but for a moment
@@ -178,12 +179,9 @@ def config_entries(
         ConfigEntry(
             key=CONF_CHIME, type=ConfigEntryType.BOOLEAN, default_value=False, required=False
         ),
-        ConfigEntry(
-            key=CONF_APP_PAUSE,
-            type=ConfigEntryType.BOOLEAN,
-            default_value=False,
-            required=False,
-            advanced=True,
+        *(
+            ConfigEntry(key=key, type=ConfigEntryType.BOOLEAN, default_value=True, required=False)
+            for key in (CONF_READ, CONF_COMPLETE, CONF_SKIP)
         ),
     )
 
@@ -212,6 +210,8 @@ class ShoppingListProvider(PluginProvider):
         self._ignore_until = 0.0
         self._lock = asyncio.Lock()
         self._unsubscribers: list[Callable[[], None]] = []
+        # the queue whose autoplay shopping mode switched on, and what it was before
+        self._autoplay_restore: tuple[str, bool] | None = None
 
     # settings
 
@@ -324,7 +324,8 @@ class ShoppingListProvider(PluginProvider):
         self.logger.info("Listening to the buttons of %s", self._player_id)
 
     async def unload(self, is_removed: bool = False) -> None:  # noqa: FBT001, FBT002
-        """Stop watching."""
+        """Stop watching, and give the queue its autoplay setting back."""
+        self._keep_queue_going(on=False)
         for unsubscribe in self._unsubscribers:
             unsubscribe()
         self._unsubscribers.clear()
@@ -376,7 +377,36 @@ class ShoppingListProvider(PluginProvider):
         if not self._mode.switched():
             return
         self.logger.info("Shopping mode %s", "on" if self._mode.on else "off")
+        self._keep_queue_going(on=self._mode.on)
         self.mass.create_task(self._announce_mode())
+
+    def _keep_queue_going(self, *, on: bool) -> None:
+        """
+        Switch on autoplay (Don't stop the music) while shopping, and back afterwards.
+
+        Next and previous can only be seen when they move the queue: with autoplay, Music
+        Assistant keeps adding tracks, so there is always a next one. With repeat on there is
+        always one anyway, and Music Assistant refuses autoplay.
+
+        :param on: Whether shopping mode is on.
+        """
+        queues = self.mass.player_queues
+        try:
+            if on and self._autoplay_restore is None and self._player_id:
+                queue_id = self._queue_id()
+                if (queue := queues.get(queue_id)) is None or queue.autoplay_enabled:
+                    return
+                if queue.repeat_mode != RepeatMode.OFF:
+                    return
+                queues.set_autoplay(queue_id, autoplay_enabled=True)
+                self._autoplay_restore = (queue_id, False)
+            elif not on and self._autoplay_restore is not None:
+                queue_id, enabled = self._autoplay_restore
+                self._autoplay_restore = None
+                if queues.get(queue_id) is not None:
+                    queues.set_autoplay(queue_id, autoplay_enabled=enabled)
+        except Exception as err:  # noqa: BLE001 - shopping works without it, only less often
+            self.logger.warning("Could not switch Don't stop the music: %s", err)
 
     async def _announce_mode(self) -> None:
         """Say that shopping mode started or ended, when the player plays."""
@@ -430,6 +460,9 @@ class ShoppingListProvider(PluginProvider):
             next_queue_item_id=queue.next_item.queue_item_id if queue.next_item else None,
         )
         before, self._snapshot = self._snapshot, snapshot
+        if self._mode.on and self._autoplay_restore is None:
+            # the music may have started only after shopping mode did
+            self._keep_queue_going(on=True)
         if before is None or (before.index, before.state, before.queue_item_id) != (
             snapshot.index,
             snapshot.state,
@@ -454,10 +487,19 @@ class ShoppingListProvider(PluginProvider):
             or now < self._ignore_until
         ):
             return
-        if detection := detect_gesture(before, snapshot, now):
+        if (detection := detect_gesture(before, snapshot, now)) and self._uses(detection.gesture):
             self.logger.debug("Recognised %s", detection)
             self._ignore_until = now + OWN_CHANGES_SECONDS
             self.mass.create_task(self._handle(queue_id, detection))
+
+    def _uses(self, gesture: Gesture) -> bool:
+        """
+        Return whether a control is taken over; one that is not keeps doing what it always does.
+
+        :param gesture: What the control does in shopping mode.
+        """
+        key = {Gesture.READ: CONF_READ, Gesture.COMPLETE: CONF_COMPLETE, Gesture.SKIP: CONF_SKIP}
+        return bool(self.config.get_value(key[gesture], default=True))
 
     async def _handle(self, queue_id: str, detection: Detection) -> None:
         """Do what a press asks for and say the result, with the music the way it was."""
@@ -497,13 +539,9 @@ class ShoppingListProvider(PluginProvider):
         """
         try:
             if detection.gesture == Gesture.READ:
-                if self.config.get_value(CONF_APP_PAUSE):
-                    await self._take_back_app_pause(queue_id)
-                else:
-                    await asyncio.sleep(PAUSE_CONFIRMED_SECONDS)
-            # the plugin halts the music itself: an app that stays silent for an announcement
-            # after its own pause plays one after a pause from the server. This also cancels
-            # the move to another track that a next or previous still has pending
+                await asyncio.sleep(PAUSE_CONFIRMED_SECONDS)
+            # this also cancels the move to another track that a next or previous still has
+            # pending
             await self.mass.player_queues.pause(queue_id)
         except Exception as err:  # noqa: BLE001 - the entry is still said when this fails
             self.logger.warning("Could not halt the music: %s", err)
@@ -512,19 +550,6 @@ class ShoppingListProvider(PluginProvider):
             await self._resume(queue_id, detection)
         except Exception as err:  # noqa: BLE001 - nothing else to do than to log it
             self.logger.warning("Could not put the music back: %s", err)
-
-    async def _take_back_app_pause(self, queue_id: str) -> None:
-        """
-        Play the music again for a moment after a pause the app made itself.
-
-        An app such as MassDroid silences its own output when its headphone button pauses, and
-        keeps an announcement that follows silent too; once the music plays again, it is back
-        in the state in which a pause from the server and an announcement work.
-        """
-        await asyncio.sleep(AFTER_APP_PAUSE_SECONDS)
-        await self.mass.players.cmd_play(self._player_id)
-        if await self._wait_until_playing(queue_id):
-            await asyncio.sleep(SETTLE_SECONDS)
 
     async def _resume(self, queue_id: str, detection: Detection) -> None:
         """Play the music again, at the track and position it was at before the press."""
@@ -608,6 +633,7 @@ class ShoppingListProvider(PluginProvider):
                 self.logger.warning("Could not switch off %s: %s", self._switch, err)
         if self._mode.switched():
             self.logger.info("Shopping mode off: %s", reason)
+            self._keep_queue_going(on=False)
 
     # the page
 
@@ -621,9 +647,7 @@ class ShoppingListProvider(PluginProvider):
         if path in {"", "/"}:
             # the language and theme the user chose in Music Assistant, else the plugin's
             preferences = user.preferences if (user := get_current_user()) else {}
-            language = page_language(
-                preferences.get("language"), self._setting(CONF_LANGUAGE, DEFAULT_LANGUAGE)
-            )
+            language = page_language(preferences.get("language"))
             theme = str(preferences.get("theme") or "auto")
             page = render_page(language, self.mass.webserver.base_url, theme)
             return web.Response(text=page, content_type="text/html")

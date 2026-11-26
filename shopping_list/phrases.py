@@ -53,12 +53,12 @@ PHRASES: dict[str, Phrases] = {
         failed="Could not tick off {}.",
     ),
 }
-DEFAULT_LANGUAGE = "de"
+DEFAULT_LANGUAGE = "en"
 
 
 def get_phrases(language: str) -> Phrases:
     """
-    Return the sentences of a language, German when the language is unknown.
+    Return the sentences of a language, English when the language is unknown.
 
     :param language: The language code from the settings, such as ``de``.
     """
